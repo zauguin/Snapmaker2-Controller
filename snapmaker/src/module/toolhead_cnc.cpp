@@ -28,6 +28,7 @@
 #include "src/core/boards.h"
 #include "src/inc/MarlinConfig.h"
 #include "src/pins/pins.h"
+#include "src/feature/spindle_laser.h"
 
 ToolHeadCNC cnc;
 
@@ -91,26 +92,19 @@ ErrCode ToolHeadCNC::Init(MAC_t &mac, uint8_t mac_index) {
 
   SetToolhead(MODULE_TOOLHEAD_CNC);
 
+  cutter.disable();
+  cutter.reset_power_limit();
+
   return E_SUCCESS;
 }
 
 
-ErrCode ToolHeadCNC::SetOutput(uint8_t power) {
-  if (power > 100)
-    power_ = 100;
-  else
-    power_ = power;
-
-  return TurnOn();
-}
-
-
-ErrCode ToolHeadCNC::TurnOn() {
+ErrCode ToolHeadCNC::TurnOn(uint8_t power) {
   CanStdMesgCmd_t cmd;
 
   uint8_t buffer[2];
 
-  buffer[0] = power_;
+  buffer[0] = power;
 
   cmd.data   = buffer;
   cmd.length = 1;

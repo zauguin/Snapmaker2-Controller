@@ -42,9 +42,9 @@ typedef IF<(SPEED_POWER_MAX > 255), uint16_t, uint8_t>::type cutter_cpower_t;
   #define CUTTER_MENU_POWER_TYPE uint16_5
   #define cutter_power2str       ui16tostr5rj
 #else
-  typedef uint8_t cutter_power_t;
-  #define CUTTER_MENU_POWER_TYPE uint8
-  #define cutter_power2str       ui8tostr3rj
+  typedef float cutter_power_t;
+  #define CUTTER_MENU_POWER_TYPE float
+  /* #define cutter_power2str       ui8tostr3rj */
 #endif
 
 #if ENABLED(MARLIN_DEV_MODE)

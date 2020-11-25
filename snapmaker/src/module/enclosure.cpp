@@ -24,6 +24,7 @@
 #include "../common/debug.h"
 #include "../module/toolhead_laser.h"
 #include "../service/system.h"
+#include "src/feature/spindle_laser.h"
 
 Enclosure enclosure;
 
@@ -165,7 +166,7 @@ void Enclosure::HandleDoorOpened() {
   LOG_I("door opened!\n");
   systemservice.PauseTrigger(TRIGGER_SOURCE_DOOR_OPEN);
   if (laser.IsOnline())
-    laser.SetPowerLimit(TOOLHEAD_LASER_POWER_SAFE_LIMIT);
+    cutter.set_power_limit();
 
   event_state_ = ENCLOSURE_EVENT_STATE_OPENED;
 }
@@ -175,7 +176,7 @@ void Enclosure::HandleDoorClosed() {
   systemservice.ClearSystemFaultBit(FAULT_FLAG_DOOR_OPENED);
 
   if (laser.IsOnline())
-    laser.SetPowerLimit(TOOLHEAD_LASER_POWER_NORMAL_LIMIT);
+    cutter.reset_power_limit();
 }
 
 void Enclosure::Process() {

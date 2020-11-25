@@ -28,7 +28,6 @@ class ToolHeadCNC: public ModuleBase {
   public:
 		ToolHeadCNC(): ModuleBase(MODULE_DEVICE_ID_CNC) {
       mac_index_ = MODULE_MAC_INDEX_INVALID;
-      power_     = 0;
       rpm_       = 0;
 
       msg_id_set_speed_ = MODULE_MESSAGE_ID_INVALID;
@@ -36,9 +35,7 @@ class ToolHeadCNC: public ModuleBase {
 
     ErrCode Init(MAC_t &mac, uint8_t mac_index);
 
-    ErrCode SetOutput(uint8_t power);
-
-    ErrCode TurnOn();
+    ErrCode TurnOn(uint8_t power);
     ErrCode TurnOff();
 
     bool IsOnline(uint8_t sub_index = 0) { return mac_index_ != MODULE_MAC_INDEX_INVALID; };
@@ -53,12 +50,11 @@ class ToolHeadCNC: public ModuleBase {
     uint16_t rpm() { return rpm_; }
     void rpm(uint16_t rpm) { rpm_ = rpm; }
 
-    uint8_t power() { return power_; }
-    void power(uint8_t power) { power_ = power; }
+    /* uint8_t power() { return power_; } */
+    /* void power(uint8_t power) { power_ = power; } */
 
   private:
     uint8_t  mac_index_;
-    uint8_t  power_;
     uint16_t rpm_;
 
     message_id_t msg_id_set_speed_;

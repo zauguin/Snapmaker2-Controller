@@ -45,6 +45,7 @@
 #include "src/gcode/parser.h"
 #include "src/feature/bedlevel/bedlevel.h"
 #include "src/feature/runout.h"
+#include "src/feature/spindle_laser.h"
 
 
 SystemService systemservice;
@@ -150,7 +151,7 @@ ErrCode SystemService::PreProcessStop() {
   print_job_timer.stop();
 
   if (ModuleBase::toolhead() == MODULE_TOOLHEAD_LASER) {
-    laser.TurnOff();
+    cutter.disable();
   }
 
   return E_SUCCESS;
@@ -279,8 +280,8 @@ void inline SystemService::resume_3dp(void) {
 
 void inline SystemService::resume_cnc(void) {
   // enable CNC motor
-  LOG_I("restore CNC power: %f\n", pl_recovery.cur_data_.cnc_power);
-  cnc.SetOutput(pl_recovery.cur_data_.cnc_power);
+  LOG_I("restore CNC power: %f\n", pl_recovery.cur_data_.cutter_unitPower);
+  cutter.set_power(pl_recovery.cur_data_.cutter_power);
 }
 
 void inline SystemService::resume_laser(void) {
@@ -439,8 +440,7 @@ ErrCode SystemService::ResumeOver() {
     }
 
     if (MODULE_TOOLHEAD_LASER == ModuleBase::toolhead()) {
-      if (pl_recovery.cur_data_.laser_pwm > 0)
-        laser.TurnOn();
+      cutter.refresh();
     }
     break;
 
@@ -592,7 +592,7 @@ ErrCode SystemService::StartWork(TriggerSource s) {
 
     // set to defualt power, but not turn on Motor
     if (MODULE_TOOLHEAD_CNC == ModuleBase::toolhead()) {
-      cnc.power(100);
+      cutter.menuPower = cutter.unitPower = 100;
     }
     break;
 
@@ -1622,7 +1622,7 @@ ErrCode SystemService::SendStatus(SSTP_Event_t &event) {
   HWORD_TO_PDU_BYTES_INDE_MOVE(buff, tmp_i16, i);
 
   // laser power
-  tmp_u32 = (uint32_t)(laser.power() * 1000);
+  tmp_u32 = (uint32_t)(cutter.menuPower * 1000);
   WORD_TO_PDU_BYTES_INDEX_MOVE(buff, tmp_u32, i);
 
   // RPM of CNC
@@ -1957,10 +1957,8 @@ ErrCode SystemService::ChangeRuntimeEnv(SSTP_Event_t &event) {
     if (param > 100 || param < 0)
       ret = E_PARAM;
     else {
-      if (laser.power_pwm() > 0)
-        laser.SetOutput(param);
-      else
-        laser.SetPower(param);
+      cutter.menuPower = param;
+      cutter.update_from_mpower();
     }
     break;
 
@@ -1980,10 +1978,8 @@ ErrCode SystemService::ChangeRuntimeEnv(SSTP_Event_t &event) {
       LOG_E("out of range: %.2f\n", param);
     }
     else {
-      cnc.power(param);
-      // change current output when it was turned on
-      if (cnc.rpm() > 0)
-        cnc.TurnOn();
+      cutter.menuPower = param;
+      cutter.update_from_mpower();
       LOG_I("new CNC power: %.2f\n", param);
     }
     break;
@@ -2016,9 +2012,9 @@ ErrCode SystemService::GetRuntimeEnv(SSTP_Event_t &event) {
     break;
 
   case RENV_TYPE_LASER_POWER:
-    tmp_i32 = (int)(pl_recovery.pre_data_.laser_percent * 1000.0f);
+    tmp_i32 = (int)(pl_recovery.pre_data_.cutter_unitPower * 1000);
     WORD_TO_PDU_BYTES(buff+1, (int)tmp_i32);
-    LOG_I("laser power: %.2f\n", pl_recovery.pre_data_.laser_percent);
+    LOG_I("laser power: %.2f\n", pl_recovery.pre_data_.cutter_unitPower);
     break;
 
   case RENV_TYPE_ZOFFSET:
@@ -2028,9 +2024,9 @@ ErrCode SystemService::GetRuntimeEnv(SSTP_Event_t &event) {
     break;
 
   case RENV_TYPE_CNC_POWER:
-    tmp_i32 = (int)(pl_recovery.pre_data_.cnc_power * 1000);
+    tmp_i32 = (int)(pl_recovery.pre_data_.cutter_unitPower * 1000);
     WORD_TO_PDU_BYTES(buff+1, tmp_i32);
-    LOG_I("laser power: %.2f\n", pl_recovery.pre_data_.cnc_power);
+    LOG_I("CNC power: %.2f\n", pl_recovery.pre_data_.cutter_unitPower);
     break;
 
   default:
@@ -2111,7 +2107,7 @@ ErrCode SystemService::CallbackPreQS(QuickStopSource source) {
     // won't turn off laser in pl_recovery.SaveEnv(), it's call by stepper ISR
     // because it may call CAN transmisson function
     if (ModuleBase::toolhead() == MODULE_TOOLHEAD_LASER) {
-      laser.TurnOff();
+      cutter.disable();
     }
     break;
 

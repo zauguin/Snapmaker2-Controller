@@ -44,6 +44,7 @@
 #include "src/module/motion.h"
 #include "src/feature/runout.h"
 #include "src/feature/bedlevel/bedlevel.h"
+#include "src/feature/spindle_laser.h"
 
 #include HAL_PATH(src/HAL, HAL.h)
 
@@ -377,14 +378,11 @@ int PowerLossRecovery::SaveEnv(void) {
 
 	switch (ModuleBase::toolhead())
 	{
-	case MODULE_TOOLHEAD_CNC:
-		cur_data_.cnc_power = cnc.power();
+	case MODULE_TOOLHEAD_CNC: case MODULE_TOOLHEAD_LASER:
+		cur_data_.cutter_power = cutter.power;
+		cur_data_.cutter_menuPower = cutter.menuPower;
+		cur_data_.cutter_unitPower = cutter.unitPower;
 		break;
-
-	case MODULE_TOOLHEAD_LASER:
-		cur_data_.laser_percent = laser.power();
-		cur_data_.laser_pwm = laser.power_pwm();
-	break;
 
   case MODULE_TOOLHEAD_3DP:
     for (i = 0; i < PP_FAN_COUNT; i++)
@@ -494,13 +492,13 @@ void PowerLossRecovery::ResumeCNC() {
 	// for CNC recover form power-loss, we need to raise Z firstly.
 	// because the drill bit maybe is in the workpiece
 	// and we need to keep CNC motor running when raising Z
-	cnc.SetOutput(pre_data_.cnc_power);
+	cutter.set_power(pre_data_.cutter_power);
 
 	relative_mode = true;
 	process_cmd_imd("G28 Z");
 	relative_mode = false;
 
-	cnc.SetOutput(0);
+	cutter.disable();
 
 	// homing and restore workspace
 	RestoreWorkspace();
@@ -510,8 +508,10 @@ void PowerLossRecovery::ResumeCNC() {
 	planner.synchronize();
 
 	// enable CNC motor
-	cnc.SetOutput(pre_data_.cnc_power);
-	LOG_I("Restore CNC power: %.2f\n", pre_data_.cnc_power);
+	cutter.menuPower = pre_data_.cutter_menuPower;
+	cutter.unitPower = pre_data_.cutter_unitPower;
+	cutter.set_power(pre_data_.cutter_power);
+	LOG_I("Restore CNC power: %.2f\n", pre_data_.cutter_power);
 
 	// move to target Z
 	move_to_limited_z(pre_data_.PositionData[Z_AXIS] + 15, 30);
@@ -522,7 +522,7 @@ void PowerLossRecovery::ResumeCNC() {
 
 void PowerLossRecovery::ResumeLaser() {
 	// make sure laser is disable
-	laser.TurnOff();
+	cutter.disable();
 
 	// homing and restore workspace
 	RestoreWorkspace();
@@ -538,10 +538,12 @@ void PowerLossRecovery::ResumeLaser() {
 	// Because we open laser when receive first command after resuming,
 	// and there will check if cur_data_.laser_pwm is larger than 0
 	// So we recover the value to them
-	cur_data_.laser_pwm = pre_data_.laser_pwm;
+	cur_data_.cutter_power = pre_data_.cutter_power;
 
 	// just change laser power but not enable output
-	laser.SetPower(pre_data_.laser_percent);
+	cutter.power     = pre_data_.cutter_power;
+	cutter.menuPower = pre_data_.cutter_menuPower;
+	cutter.unitPower = pre_data_.cutter_unitPower;
 }
 
 
@@ -601,10 +603,10 @@ ErrCode PowerLossRecovery::ResumeWork() {
 			return E_DOOR_OPENED;
 		}
 
-		LOG_I("previous CNC power is %.2f\n", pre_data_.cnc_power);
-		if (pre_data_.cnc_power < 50) {
+		LOG_I("previous CNC power is %.2f\n", pre_data_.cutter_power);
+		if (pre_data_.cutter_power < 50) {
 			LOG_I("previous power is less than 50%, set to 50%");
-			pre_data_.cnc_power = 50;
+			pre_data_.cutter_power = pre_data_.cutter_unitPower = pre_data_.cutter_menuPower = 50;
 		}
 
 		ResumeCNC();
@@ -616,8 +618,8 @@ ErrCode PowerLossRecovery::ResumeWork() {
 			return E_DOOR_OPENED;
 		}
 
-		LOG_I("previous recorded target Laser power is %.2f\n", pre_data_.laser_percent);
-		LOG_I("previous recorded target laser PWM is 0x%x\n", pre_data_.laser_pwm);
+		LOG_I("previous recorded target Laser power is %.2f\n", pre_data_.cutter_unitPower);
+		LOG_I("previous recorded target laser PWM is 0x%x\n", pre_data_.cutter_power);
 
 		ResumeLaser();
 		break;

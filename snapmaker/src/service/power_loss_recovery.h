@@ -47,11 +47,10 @@ typedef struct __attribute__((aligned (4))) {
 	float PrintFeedRate;
 	// speed of travel
 	float TravelFeedRate;
-	// CNC power
-	uint8_t cnc_power;
-	// laser Power
-	float laser_percent;
-	uint16_t laser_pwm;
+	// Cutter power
+	uint8_t cutter_power;
+	cutter_power_t cutter_menuPower;
+	cutter_power_t cutter_unitPower;
 	// target temperature of heat bed
 	int16_t BedTamp;
 	// position of stepper on last move

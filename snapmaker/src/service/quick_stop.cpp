@@ -30,6 +30,7 @@
 #include "src/module/temperature.h"
 #include "src/module/printcounter.h"
 #include "src/feature/bedlevel/bedlevel.h"
+#include "src/feature/spindle_laser.h"
 #include HAL_PATH(src/HAL, HAL_watchdog_STM32F1.h)
 
 #define CNC_SAFE_HIGH_DIFF 30  // Bed to CNC head height. mm
@@ -249,7 +250,7 @@ void QuickStopService::Park() {
         if (source_ != QS_SOURCE_POWER_LOSS)
           idle();
       }
-      cnc.SetOutput(0);
+      cutter.disable();
       move_to_limited_z(Z_MAX_POS, 30);
     }
     break;

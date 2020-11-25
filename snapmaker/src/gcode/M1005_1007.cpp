@@ -33,6 +33,7 @@
 #include "src/gcode/gcode.h"
 #include "src/module/motion.h"
 #include "src/libs/hex_print.h"
+#include "src/feature/spindle_laser.h"
 
 void GcodeSuite::M1005() {
   CanExtCmd_t cmd;
@@ -104,13 +105,13 @@ void GcodeSuite::M1006() {
     SERIAL_ECHOLN("LASER");
     SERIAL_ECHO("Current Status: ");
     SERIAL_ECHOLN((laser.state() == TOOLHEAD_LASER_STATE_ON)? "ON" : "OFF");
-    SERIAL_ECHOLNPAIR("Current Power: ", laser.power());
+    SERIAL_ECHOLNPAIR("Current Power: ", cutter.menuPower);
     SERIAL_ECHOLNPAIR("Focus Height: ", laser.focus());
     break;
 
   case MODULE_TOOLHEAD_CNC:
     SERIAL_ECHOLN("CNC");
-    SERIAL_ECHOLNPAIR("Current Power: ", cnc.power());
+    SERIAL_ECHOLNPAIR("Current Power: ", cutter.menuPower);
     SERIAL_ECHOLNPAIR("RPM: ", cnc.rpm());
     break;
 

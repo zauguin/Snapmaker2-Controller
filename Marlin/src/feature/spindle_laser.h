@@ -29,76 +29,44 @@
 #include "../inc/MarlinConfig.h"
 
 #include "spindle_laser_types.h"
+#include "module/toolhead_cnc.h"
+#include "module/toolhead_laser.h"
 
 #if ENABLED(LASER_POWER_INLINE)
   #include "../module/planner.h"
 #endif
-
-#define PCT_TO_PWM(X) ((X) * 255 / 100)
 
 #ifndef SPEED_POWER_INTERCEPT
   #define SPEED_POWER_INTERCEPT 0
 #endif
 #define SPEED_POWER_FLOOR TERN(CUTTER_POWER_RELATIVE, SPEED_POWER_MIN, 0)
 
-// #define _MAP(N,S1,S2,D1,D2) ((N)*_MAX((D2)-(D1),0)/_MAX((S2)-(S1),1)+(D1))
+// Ensure:
+static_assert(CUTTER_UNIT_IS(PERCENT), "Unsupported unit");
 
 class SpindleLaser {
 public:
-  static constexpr float
-    min_pct = round(TERN(CUTTER_POWER_RELATIVE, 0, (100 * float(SPEED_POWER_MIN) / TERN(SPINDLE_FEATURE, float(SPEED_POWER_MAX), 100)))),
-    max_pct = round(TERN(SPINDLE_FEATURE, 100, float(SPEED_POWER_MAX)));
-
-  static const inline uint8_t pct_to_ocr(const float pct) { return uint8_t(PCT_TO_PWM(pct)); }
-
-  // cpower = configured values (ie SPEED_POWER_MAX)
-  static const inline uint8_t cpwr_to_pct(const cutter_cpower_t cpwr) { // configured value to pct
-    return unitPower ? round(100 * (cpwr - SPEED_POWER_FLOOR) / (SPEED_POWER_MAX - SPEED_POWER_FLOOR)) : 0;
+  static constexpr float min_pct = 0, max_pct = 100;
+  static uint8_t pct_to_ocr(const float pct) {
+    if (laser.IsOnline())
+      return pct <= 1 ? uint8_t(round(pct * 20)) : 20 + uint8_t(round((pct-1) * 235 / 99));
+    return uint8_t(round(pct));
   }
 
   // Convert a configured value (cpower)(ie SPEED_POWER_STARTUP) to unit power (upwr, upower),
   // which can be PWM, Percent, or RPM (rel/abs).
-  static const inline cutter_power_t cpwr_to_upwr(const cutter_cpower_t cpwr) { // STARTUP power to Unit power
-    const cutter_power_t upwr = (
-      #if ENABLED(SPINDLE_FEATURE)
-        // Spindle configured values are in RPM
-        #if CUTTER_UNIT_IS(RPM)
-          cpwr                            // to RPM
-        #elif CUTTER_UNIT_IS(PERCENT)     // to PCT
-          cpwr_to_pct(cpwr)
-        #else                             // to PWM
-          PCT_TO_PWM(cpwr_to_pct(cpwr))
-        #endif
-      #else
-        // Laser configured values are in PCT
-        #if CUTTER_UNIT_IS(PWM255)
-          PCT_TO_PWM(cpwr)
-        #else
-          cpwr                            // to RPM/PCT
-        #endif
-      #endif
-    );
-    return upwr;
-  }
-
-  static const cutter_power_t mpower_min() { return cpwr_to_upwr(SPEED_POWER_MIN); }
-  static const cutter_power_t mpower_max() { return cpwr_to_upwr(SPEED_POWER_MAX); }
+  // In the Snapmaker case we always use Percent values anyway.
+  static constexpr inline cutter_power_t cpwr_to_upwr(const cutter_cpower_t cpwr) { return cpwr; } // STARTUP power to Unit power
 
   static bool isReady;                    // Ready to apply power setting from the UI to OCR
-  static uint8_t power;
-
-  #if ENABLED(MARLIN_DEV_MODE)
-    static cutter_frequency_t frequency;  // Set PWM frequency; range: 2K-50K
-  #endif
+  static uint8_t power, power_limit;
 
   static cutter_power_t menuPower,        // Power as set via LCD menu in PWM, Percentage or RPM
                         unitPower;        // Power as displayed status in PWM, Percentage or RPM
 
-  static void init();
-
-  #if ENABLED(MARLIN_DEV_MODE)
-    static inline void refresh_frequency() { set_pwm_frequency(pin_t(SPINDLE_LASER_PWM_PIN), frequency); }
-  #endif
+  static void init() {
+    power_limit = upower_to_ocr(SPEED_POWER_MAX);
+  }
 
   // Modifying this function should update everywhere
   static inline bool enabled(const cutter_power_t opwr) { return opwr > 0; }
@@ -109,9 +77,15 @@ public:
   FORCE_INLINE static void refresh() { apply_power(power); }
   FORCE_INLINE static void set_power(const uint8_t upwr) { power = upwr; refresh(); }
 
+  FORCE_INLINE static void set_power_limit(cutter_power_t new_limit = SPEED_POWER_SAFE_LIMIT) {
+    power_limit = upower_to_ocr(new_limit);
+    if (enabled()) set_ocr(power);
+  }
+  FORCE_INLINE static void reset_power_limit() { set_power_limit(SPEED_POWER_MAX); }
+
   #if ENABLED(SPINDLE_LASER_PWM)
 
-    static void set_ocr(const uint8_t ocr);
+    static void set_ocr(uint8_t ocr);
     static inline void set_ocr_power(const uint8_t ocr) { power = ocr; set_ocr(ocr); }
     static void ocr_off();
     // Used to update output for power->OCR translation
@@ -143,32 +117,10 @@ public:
     }
     static inline cutter_power_t power_to_range(const cutter_power_t pwr, const uint8_t pwrUnit) {
       if (pwr <= 0) return 0;
-      cutter_power_t upwr;
-      switch (pwrUnit) {
-        case 0:                                                 // PWM
-          upwr = cutter_power_t(
-              (pwr < pct_to_ocr(min_pct)) ? pct_to_ocr(min_pct) // Use minimum if set below
-            : (pwr > pct_to_ocr(max_pct)) ? pct_to_ocr(max_pct) // Use maximum if set above
-            :  pwr
-          );
-          break;
-        case 1:                                                 // PERCENT
-          upwr = cutter_power_t(
-              (pwr < min_pct) ? min_pct                         // Use minimum if set below
-            : (pwr > max_pct) ? max_pct                         // Use maximum if set above
-            :  pwr                                              // PCT
-          );
-          break;
-        case 2:                                                 // RPM
-          upwr = cutter_power_t(
-              (pwr < SPEED_POWER_MIN) ? SPEED_POWER_MIN         // Use minimum if set below
-            : (pwr > SPEED_POWER_MAX) ? SPEED_POWER_MAX         // Use maximum if set above
-            : pwr                                               // Calculate OCR value
-          );
-          break;
-        default: break;
-      }
-      return upwr;
+      auto toolhead = ModuleBase::toolhead();
+      if (pwrUnit == 0 && toolhead == MODULE_TOOLHEAD_LASER && pwr >= 255) return 255;
+      if ((pwrUnit == 1 || (pwrUnit == 0 && toolhead == MODULE_TOOLHEAD_CNC)) && pwr >= 100) return 100;
+      return pwr;
     }
 
   #endif // SPINDLE_LASER_PWM
@@ -179,9 +131,8 @@ public:
 
   // Wait for spindle to spin up or spin down
   static inline void power_delay(const bool on) {
-    #if DISABLED(LASER_POWER_INLINE)
+    if (cnc.IsOnline())
       safe_delay(on ? SPINDLE_LASER_POWERUP_DELAY : SPINDLE_LASER_POWERDOWN_DELAY);
-    #endif
   }
 
   #if ENABLED(SPINDLE_CHANGE_DIR)
@@ -192,7 +143,7 @@ public:
 
   static inline void disable() { isReady = false; set_enabled(false); }
 
-  #if HAS_LCD_MENU
+  #if 1 || HAS_LCD_MENU
 
     static inline void enable_with_dir(const bool reverse) {
       isReady = true;

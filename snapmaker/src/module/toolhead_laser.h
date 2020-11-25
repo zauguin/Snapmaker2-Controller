@@ -26,8 +26,6 @@
 
 #include "../hmi/uart_host.h"
 
-#define TOOLHEAD_LASER_POWER_SAFE_LIMIT   (0.5)
-#define TOOLHEAD_LASER_POWER_NORMAL_LIMIT (100)
 #define TOOLHEAD_LASER_CAMERA_FOCUS_MAX   (65000)
 
 enum ToolheadLaserFanState {
@@ -85,9 +83,6 @@ enum LaserCameraCommand {
 class ToolHeadLaser: public ModuleBase {
   public:
 		ToolHeadLaser(): ModuleBase(MODULE_DEVICE_ID_LASER) {
-      power_limit_ = 100;
-      power_pwm_   = 0;
-      power_val_   = 0;
       mac_index_   = MODULE_MAC_INDEX_INVALID;
 
       state_ = TOOLHEAD_LASER_STATE_OFFLINE;
@@ -104,12 +99,8 @@ class ToolHeadLaser: public ModuleBase {
 
     ErrCode Init(MAC_t &mac, uint8_t mac_index);
 
-    void TurnOn();
+    void TurnOn(uint16_t pwm);
     void TurnOff();
-
-    void SetPower(float power);       // change power_val_ and power_pwm_ but not change actual output
-    void SetOutput(float power);      // change power_val_, power_pwm_ and actual output
-    void SetPowerLimit(float limit);  // change power_val_, power_pwm_ and power_limit_, may change actual output if current output is beyond limit
 
     void TryCloseFan();
     bool IsOnline(uint8_t sub_index = 0) { return mac_index_ != MODULE_MAC_INDEX_INVALID; }
@@ -127,11 +118,6 @@ class ToolHeadLaser: public ModuleBase {
     void Process();
 
     uint32_t mac(uint8_t sub_index = 0) { return canhost.mac(mac_index_); }
-
-    float power() { return power_val_; }
-
-    uint16_t power_pwm() { return power_pwm_; };
-    void power_pwm(uint16_t pwm) { power_pwm_ = pwm; }
 
     uint16_t focus() { return focus_; }
     void focus(uint16_t focus) {
@@ -155,11 +141,6 @@ class ToolHeadLaser: public ModuleBase {
     uint16_t timer_in_process_;
 
     ToolHeadLaserState  state_;
-
-    float power_val_;
-    float power_limit_;
-
-    uint16_t power_pwm_;
 
     uint8_t  fan_state_;
     uint16_t fan_tick_;

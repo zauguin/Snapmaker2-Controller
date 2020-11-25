@@ -83,8 +83,8 @@
 
 #define HEATER_BED_PIN     PA7   // BED
 
-#define LASER_PIN      PB1
-#define SPINDLE_LASER_ENA_PIN       PB10
+#define SPINDLE_LASER_ENA_PIN PB10
+#define SPINDLE_LASER_PWM_PIN PE14
 
 #define CNC_PIN        PB1
 

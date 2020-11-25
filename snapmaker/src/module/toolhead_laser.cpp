@@ -33,6 +33,7 @@
 #include "src/pins/pins.h"
 #include "src/module/motion.h"
 #include "src/module/planner.h"
+#include "src/feature/spindle_laser.h"
 
 
 #define LASER_CLOSE_FAN_DELAY     (120)
@@ -116,17 +117,20 @@ ErrCode ToolHeadLaser::Init(MAC_t &mac, uint8_t mac_index) {
   // set toolhead
   SetToolhead(MODULE_TOOLHEAD_LASER);
 
+  cutter.disable();
+  cutter.reset_power_limit();
+
   return E_SUCCESS;
 }
 
 
-void ToolHeadLaser::TurnOn() {
+void ToolHeadLaser::TurnOn(uint16_t pwm) {
   if (state_ == TOOLHEAD_LASER_STATE_OFFLINE)
     return;
 
   state_ = TOOLHEAD_LASER_STATE_ON;
-  CheckFan(power_pwm_);
-  TimSetPwm(power_pwm_);
+  CheckFan(pwm);
+  TimSetPwm(pwm);
 }
 
 
@@ -137,48 +141,6 @@ void ToolHeadLaser::TurnOff() {
   state_ = TOOLHEAD_LASER_STATE_OFF;
   CheckFan(0);
   TimSetPwm(0);
-}
-
-
-void ToolHeadLaser::SetOutput(float power) {
-  SetPower(power);
-  TurnOn();
-}
-
-
-void ToolHeadLaser::SetPower(float power) {
-  int   integer;
-  float decimal;
-
-  if (state_ == TOOLHEAD_LASER_STATE_OFFLINE)
-    return;
-
-  power_val_ = power;
-
-  if (power > power_limit_)
-    power = power_limit_;
-
-  integer = (int)power;
-  decimal = power - integer;
-
-  power_pwm_ = (uint16_t)(power_table[integer] + (power_table[integer + 1] - power_table[integer]) * decimal);
-}
-
-
-void ToolHeadLaser::SetPowerLimit(float limit) {
-  float cur_power = power_val_;
-
-  if (limit > TOOLHEAD_LASER_POWER_NORMAL_LIMIT)
-    limit = TOOLHEAD_LASER_POWER_NORMAL_LIMIT;
-
-  power_limit_ = limit;
-
-  SetPower(power_val_);
-  power_val_ = cur_power;
-
-  // check if we need to change current output
-  if (state_ == TOOLHEAD_LASER_STATE_ON)
-    TurnOn();
 }
 
 
@@ -428,7 +390,8 @@ ErrCode ToolHeadLaser::DoAutoFocusing(SSTP_Event_t &event) {
     planner.synchronize();
 
     // Laser on
-    SetOutput(laser_pwr_in_cali);
+    cutter.unitPower = cutter.upower_to_ocr(laser_pwr_in_cali);
+    cutter.set_power(cutter.unitPower);
 
     // Draw Line
     if((i % 5) == 0)
@@ -439,7 +402,7 @@ ErrCode ToolHeadLaser::DoAutoFocusing(SSTP_Event_t &event) {
     planner.synchronize();
 
     // Laser off
-    SetOutput(0);
+    cutter.disable();
 
     // Move up Z increase
     if(i != (Count - 1))
