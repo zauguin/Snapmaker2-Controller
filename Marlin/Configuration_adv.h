@@ -1804,6 +1804,9 @@
   #endif
 #endif
 
+//#define PROBE_MAX_TRIGGER_HEIGHT Z_CLEARANCE_MULTI_PROBE
+#define PROBE_MAX_TRIGGER_HEIGHT 15 // Maximal height for probe to trigger
+
 // @section extras
 
 //
