@@ -84,6 +84,9 @@
 
 #define G29_RETURN(b) return TERN_(G29_RETRY_AND_RECOVER, b)
 
+extern uint32_t GRID_MAX_POINTS_X;
+extern uint32_t GRID_MAX_POINTS_Y;
+
 /**
  * G29: Detailed Z probe, probes the bed at 3 or more points.
  *      Will fail if the printer has not been homed with G28.
@@ -214,13 +217,13 @@ G29_TYPE GcodeSuite::G29() {
       ABL_VAR bool do_topography_map;
       ABL_VAR xy_uint8_t abl_grid_points;
     #else // Bilinear
-      constexpr xy_uint8_t abl_grid_points = { GRID_MAX_POINTS_X, GRID_MAX_POINTS_Y };
+      xy_uint8_t abl_grid_points = { GRID_MAX_POINTS_X, GRID_MAX_POINTS_Y };
     #endif
 
     #if ENABLED(AUTO_BED_LEVELING_LINEAR)
       ABL_VAR int abl_points;
     #else
-      int constexpr abl_points = GRID_MAX_POINTS;
+      int abl_points = GRID_MAX_POINTS;
     #endif
 
     #if ENABLED(AUTO_BED_LEVELING_BILINEAR)

@@ -35,6 +35,9 @@
   #include "../../../lcd/extui/ui_api.h"
 #endif
 
+extern uint32_t  GRID_MAX_POINTS_X;
+extern uint32_t  GRID_MAX_POINTS_Y;
+
 /**
  * M421: Set one or more Mesh Bed Leveling Z coordinates
  *

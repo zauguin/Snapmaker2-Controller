@@ -33,6 +33,15 @@
   #include "../feature/power.h"
 #endif
 
+#include "../MarlinCore.h"
+
+#if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+  #include "../../../snapmaker/src/module/toolhead_3dp.h"
+  #include "../../../snapmaker/src/service/system.h"
+  #include "../../../snapmaker/src/common/debug.h"
+  #include "../../../snapmaker/src/snapmaker.h"
+#endif
+
 #ifndef SOFT_PWM_SCALE
   #define SOFT_PWM_SCALE 0
 #endif
@@ -214,14 +223,29 @@ struct PIDHeaterInfo : public HeaterInfo {
 // Heater watch handling
 template <int INCREASE, int HYSTERESIS, millis_t PERIOD>
 struct HeaterWatch {
-  uint16_t target;
+  float target;
   millis_t next_ms;
+  uint8_t debounce_cnt;
+  uint8_t debounce_max;
   inline bool elapsed(const millis_t &ms) { return next_ms && ELAPSED(ms, next_ms); }
   inline bool elapsed() { return elapsed(millis()); }
 
-  inline void restart(const int16_t curr, const int16_t tgt) {
+  inline bool debounce(bool has_exception) {
+    if (has_exception) {
+      if (++debounce_cnt == debounce_max)
+        return true;
+      else if (debounce_cnt > debounce_max)
+        debounce_cnt = debounce_max;
+    }
+    else if (debounce_cnt < debounce_max)
+      debounce_cnt = 0;
+
+    return false;
+  }
+
+  inline void restart(const float curr, const float tgt) {
     if (tgt) {
-      const int16_t newtarget = curr + INCREASE;
+      const float newtarget = curr + INCREASE;
       if (newtarget < tgt - HYSTERESIS - 1) {
         target = newtarget;
         next_ms = millis() + SEC_TO_MS(PERIOD);
@@ -376,7 +400,11 @@ class Temperature {
 
     static volatile bool raw_temps_ready;
 
-    TERN_(WATCH_HOTENDS, static hotend_watch_t watch_hotend[HOTENDS]);
+    #if WATCH_HOTENDS
+      static hotend_watch_t watch_hotend[HOTENDS];
+      static hotend_watch_t watch_hotend_tempdrop[HOTENDS];
+      static hotend_watch_t watch_hotend_notheated[HOTENDS];
+    #endif
 
     #if ENABLED(TEMP_SENSOR_1_AS_REDUNDANT)
       static uint16_t redundant_temperature_raw;
@@ -391,8 +419,14 @@ class Temperature {
     TERN_(HAS_HOTEND, static temp_range_t temp_range[HOTENDS]);
 
     #if HAS_HEATED_BED
-      TERN_(WATCH_BED, static bed_watch_t watch_bed);
+      #if WATCH_BED
+        static bed_watch_t watch_bed;
+        static bed_watch_t watch_bed_tempdrop;
+        static bed_watch_t watch_bed_notheated;
+      #endif
+
       TERN(PIDTEMPBED,,static millis_t next_bed_check_ms);
+
       #ifdef BED_MINTEMP
         static int16_t mintemp_raw_BED;
       #endif
@@ -581,6 +615,8 @@ class Temperature {
 
     #if WATCH_HOTENDS
       static void start_watching_hotend(const uint8_t e=0);
+      static void start_watching_hotend_tempdrop(const uint8_t e=0);
+      static void start_watching_hotend_notheated(bool first_heating, const uint8_t e=0);
     #else
       static inline void start_watching_hotend(const uint8_t=0) {}
     #endif
@@ -588,6 +624,14 @@ class Temperature {
     #if HAS_HOTEND
 
       static void setTargetHotend(const int16_t celsius, const uint8_t E_NAME) {
+        LOG_I("new E target temp: %d\n", celsius);
+
+        if (action_ban & ACTION_BAN_NO_HEATING_HOTEND) {
+          if (celsius > 0) {
+            LOG_E("ERROR: System Fault[0x%X]! NOW cannot heat hotend!\n", systemservice.GetFaultFlag());
+            return;
+          }
+        }
         const uint8_t ee = HOTEND_INDEX;
         #ifdef MILLISECONDS_PREHEAT_TIME
           if (celsius == 0)
@@ -598,6 +642,11 @@ class Temperature {
         TERN_(AUTO_POWER_CONTROL, if (celsius) powerManager.power_on());
         temp_hotend[ee].target = _MIN(celsius, temp_range[ee].maxtemp - HOTEND_OVERSHOOT);
         start_watching_hotend(ee);
+        start_watching_hotend_tempdrop(ee);
+        start_watching_hotend_notheated(true, ee);
+        #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+          printer1->SetHeater(celsius, HOTEND_INDEX);
+        #endif
       }
 
       FORCE_INLINE static bool isHeatingHotend(const uint8_t E_NAME) {
@@ -638,11 +687,23 @@ class Temperature {
 
       #if WATCH_BED
         static void start_watching_bed();
+        static void start_watching_bed_tempdrop();
       #else
         static inline void start_watching_bed() {}
+        static void start_watching_bed_tempdrop() {};
       #endif
+        static void start_watching_bed_notheated(bool first_heating);
 
       static void setTargetBed(const int16_t celsius) {
+
+        LOG_I("new B target temp: %d\n", celsius);
+
+        if (action_ban & ACTION_BAN_NO_HEATING_BED) {
+          if (celsius > 0) {
+            LOG_E("ERROR: System Fault[0x%X]! now cannot heat Bed!\n", systemservice.GetFaultFlag());
+            return;
+          }
+        }
         TERN_(AUTO_POWER_CONTROL, if (celsius) powerManager.power_on());
         temp_bed.target =
           #ifdef BED_MAX_TARGET
@@ -651,7 +712,9 @@ class Temperature {
             celsius
           #endif
         ;
-        start_watching_bed();
+        // start_watching_bed();
+        // for now we check if bed start heating and if bed temp over upper limit
+        start_watching_bed_notheated(true);
       }
 
       static bool wait_for_bed(const bool no_wait_for_cooling=true

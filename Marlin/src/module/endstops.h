@@ -26,16 +26,18 @@
  */
 
 #include "../inc/MarlinConfig.h"
+#include "../MarlinCore.h"
 #include <stdint.h>
 
 enum EndstopEnum : char {
-  X_MIN,  Y_MIN,  Z_MIN,  Z_MIN_PROBE,
-  X_MAX,  Y_MAX,  Z_MAX,
+  X_MIN, Y_MIN, Z_MIN, Z_MIN_PROBE,
+  X_MAX, Y_MAX, Z_MAX,
   X2_MIN, X2_MAX,
   Y2_MIN, Y2_MAX,
   Z2_MIN, Z2_MAX,
   Z3_MIN, Z3_MAX,
-  Z4_MIN, Z4_MAX
+  Z4_MIN, Z4_MAX,
+  FILAMENT1=19, FILAMENT2=20,
 };
 
 #define X_ENDSTOP (X_HOME_DIR < 0 ? X_MIN : X_MAX)
@@ -63,11 +65,13 @@ class Endstops {
     static bool enabled, enabled_globally;
     static esbits_t live_state;
     static volatile uint8_t hit_state;      // Use X_MIN, Y_MIN, Z_MIN and Z_MIN_PROBE as BIT index
+    static uint8_t prev_hit_state; // = 0
 
     #if ENDSTOP_NOISE_THRESHOLD
       static esbits_t validated_live_state;
       static uint8_t endstop_poll_count;    // Countdown from threshold for polling
     #endif
+
 
   public:
     Endstops() {};
@@ -96,7 +100,7 @@ class Endstops {
      * If abort_enabled() and moving towards a triggered switch, abort the current move.
      * Called from ISR contexts.
      */
-    static void update();
+    static void update() AT_SNAP_SECTION;
 
     /**
      * Get Endstop hit state.
@@ -159,6 +163,16 @@ class Endstops {
       static void monitor();
       static void run_monitor();
     #endif
+
+    /**
+     *reinit_hit_status:Reinitialize the endstops status
+    */
+    static void reinit_hit_status() {
+      hit_state = 0;
+      live_state = 0;
+      prev_hit_state = 0;
+      update();
+    }
 
     #if ENABLED(SPI_ENDSTOPS)
       typedef struct {

@@ -92,11 +92,11 @@ Stepper stepper; // Singleton
 #include "motion.h"
 
 #include "temperature.h"
-#include "../lcd/ultralcd.h"
 #include "../gcode/queue.h"
-#include "../sd/cardreader.h"
 #include "../MarlinCore.h"
 #include "../HAL/shared/Delay.h"
+
+#include "../../../snapmaker/src/snapmaker.h"
 
 #if ENABLED(INTEGRATED_BABYSTEPPING)
   #include "../feature/babystep.h"
@@ -458,6 +458,7 @@ void Stepper::set_directions() {
 
   DIR_WAIT_BEFORE();
 
+  #if DISABLED(SW_MACHINE_SIZE)
   #define SET_STEP_DIR(A)                       \
     if (motor_direction(_AXIS(A))) {            \
       A##_APPLY_DIR(INVERT_##A##_DIR, false);   \
@@ -466,7 +467,19 @@ void Stepper::set_directions() {
     else {                                      \
       A##_APPLY_DIR(!INVERT_##A##_DIR, false);  \
       count_direction[_AXIS(A)] = 1;            \
-    }
+    } 
+
+  #else
+  #define SET_STEP_DIR(A)                       \
+    if (motor_direction(_AXIS(A))) {            \
+      A##_APPLY_DIR(A##_DIR, false);  \
+      count_direction[_AXIS(A)] = -1;           \
+    }                                           \
+    else {                                      \
+      A##_APPLY_DIR(!A##_DIR, false); \
+      count_direction[_AXIS(A)] = 1;            \
+    } 
+  #endif // DISABLED(SW_MACHINE_SIZE)
 
   #if HAS_X_DIR
     SET_STEP_DIR(X); // A
@@ -1336,7 +1349,7 @@ void Stepper::set_directions() {
  *
  * Directly pulses the stepper motors at high frequency.
  */
-
+HAL_STEP_TIMER_ISR() AT_SNAP_SECTION;
 HAL_STEP_TIMER_ISR() {
   HAL_timer_isr_prologue(STEP_TIMER_NUM);
 
@@ -1374,6 +1387,29 @@ void Stepper::isr() {
 
   // We need this variable here to be able to use it in the following loop
   hal_timer_t min_ticks;
+
+
+  // checking power loss here because when no moves in block buffer, ISR will not
+  // execute to endstop.update(), then we cannot check power loss there.
+  // But if power loss happened and ISR cannot get block, no need to check again
+  if (quickstop.CheckInISR(current_block)) {
+    abort_current_block = false;
+    if (current_block) {
+      axis_did_move = 0;
+      current_block = NULL;
+    }
+
+    planner.block_buffer_nonbusy = planner.block_buffer_tail = \
+      planner.block_buffer_planned = planner.block_buffer_head;
+
+    // interval = 1 ms
+    HAL_timer_set_compare(STEP_TIMER_NUM,
+        hal_timer_t(HAL_timer_get_count(STEP_TIMER_NUM) + (STEPPER_TIMER_RATE / 1000)));
+
+    ENABLE_ISRS();
+    return;
+  }
+
   do {
     // Enable ISRs to reduce USART processing latency
     ENABLE_ISRS();
@@ -1803,6 +1839,7 @@ uint32_t Stepper::block_phase_isr() {
           PAGE_SEGMENT_UPDATE_POS(E);
         }
       #endif
+      pl_recovery.SaveCmdLine(current_block->filePos);
       TERN_(HAS_FILAMENT_RUNOUT_DISTANCE, runout.block_completed(current_block));
       discard_current_block();
     }
@@ -2293,6 +2330,9 @@ uint32_t Stepper::block_phase_isr() {
 
     //const hal_timer_t added_step_ticks = hal_timer_t(ADDED_STEP_TICKS);
 
+    // recored E stepper position when enable linear advance
+    count_position[E_AXIS] += LA_steps;
+
     // Step E stepper if we have steps
     #if ISR_MULTI_STEPS
       bool firstStep = true;
@@ -2417,30 +2457,6 @@ void Stepper::init() {
       Z4_DIR_INIT();
     #endif
   #endif
-  #if HAS_E0_DIR
-    E0_DIR_INIT();
-  #endif
-  #if HAS_E1_DIR
-    E1_DIR_INIT();
-  #endif
-  #if HAS_E2_DIR
-    E2_DIR_INIT();
-  #endif
-  #if HAS_E3_DIR
-    E3_DIR_INIT();
-  #endif
-  #if HAS_E4_DIR
-    E4_DIR_INIT();
-  #endif
-  #if HAS_E5_DIR
-    E5_DIR_INIT();
-  #endif
-  #if HAS_E6_DIR
-    E6_DIR_INIT();
-  #endif
-  #if HAS_E7_DIR
-    E7_DIR_INIT();
-  #endif
 
   // Init Enable Pins - steppers default to disabled.
   #if HAS_X_ENABLE
@@ -2475,39 +2491,7 @@ void Stepper::init() {
       if (!Z_ENABLE_ON) Z4_ENABLE_WRITE(HIGH);
     #endif
   #endif
-  #if HAS_E0_ENABLE
-    E0_ENABLE_INIT();
-    if (!E_ENABLE_ON) E0_ENABLE_WRITE(HIGH);
-  #endif
-  #if HAS_E1_ENABLE
-    E1_ENABLE_INIT();
-    if (!E_ENABLE_ON) E1_ENABLE_WRITE(HIGH);
-  #endif
-  #if HAS_E2_ENABLE
-    E2_ENABLE_INIT();
-    if (!E_ENABLE_ON) E2_ENABLE_WRITE(HIGH);
-  #endif
-  #if HAS_E3_ENABLE
-    E3_ENABLE_INIT();
-    if (!E_ENABLE_ON) E3_ENABLE_WRITE(HIGH);
-  #endif
-  #if HAS_E4_ENABLE
-    E4_ENABLE_INIT();
-    if (!E_ENABLE_ON) E4_ENABLE_WRITE(HIGH);
-  #endif
-  #if HAS_E5_ENABLE
-    E5_ENABLE_INIT();
-    if (!E_ENABLE_ON) E5_ENABLE_WRITE(HIGH);
-  #endif
-  #if HAS_E6_ENABLE
-    E6_ENABLE_INIT();
-    if (!E_ENABLE_ON) E6_ENABLE_WRITE(HIGH);
-  #endif
-  #if HAS_E7_ENABLE
-    E7_ENABLE_INIT();
-    if (!E_ENABLE_ON) E7_ENABLE_WRITE(HIGH);
-  #endif
-
+  
   #define _STEP_INIT(AXIS) AXIS ##_STEP_INIT()
   #define _WRITE_STEP(AXIS, HIGHLOW) AXIS ##_STEP_WRITE(HIGHLOW)
   #define _DISABLE_AXIS(AXIS) DISABLE_AXIS_## AXIS()
@@ -2550,31 +2534,6 @@ void Stepper::init() {
       Z4_STEP_WRITE(INVERT_Z_STEP_PIN);
     #endif
     AXIS_INIT(Z, Z);
-  #endif
-
-  #if E_STEPPERS && HAS_E0_STEP
-    E_AXIS_INIT(0);
-  #endif
-  #if E_STEPPERS > 1 && HAS_E1_STEP
-    E_AXIS_INIT(1);
-  #endif
-  #if E_STEPPERS > 2 && HAS_E2_STEP
-    E_AXIS_INIT(2);
-  #endif
-  #if E_STEPPERS > 3 && HAS_E3_STEP
-    E_AXIS_INIT(3);
-  #endif
-  #if E_STEPPERS > 4 && HAS_E4_STEP
-    E_AXIS_INIT(4);
-  #endif
-  #if E_STEPPERS > 5 && HAS_E5_STEP
-    E_AXIS_INIT(5);
-  #endif
-  #if E_STEPPERS > 6 && HAS_E6_STEP
-    E_AXIS_INIT(6);
-  #endif
-  #if E_STEPPERS > 7 && HAS_E7_STEP
-    E_AXIS_INIT(7);
   #endif
 
   #if DISABLED(I2S_STEPPER_STREAM)

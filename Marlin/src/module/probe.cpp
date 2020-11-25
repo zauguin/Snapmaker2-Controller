@@ -36,7 +36,8 @@
 #include "endstops.h"
 
 #include "../gcode/gcode.h"
-#include "../lcd/ultralcd.h"
+
+#include "../../../snapmaker/src/snapmaker.h"
 
 #include "../MarlinCore.h" // for stop(), disable_e_steppers, wait_for_user
 
@@ -342,9 +343,7 @@ bool Probe::set_deployed(const bool deploy) {
     DEBUG_POS("Probe::set_deployed", current_position);
     DEBUG_ECHOLNPAIR("deploy: ", deploy);
   }
-
   if (endstops.z_probe_enabled == deploy) return false;
-
   // Make room for probe to deploy (or stow)
   // Fix-mounted probe should only raise for deploy
   // unless PAUSE_BEFORE_DEPLOY_STOW is enabled
@@ -492,6 +491,7 @@ bool Probe::probe_down_to_z(const float z, const feedRate_t fr_mm_s) {
 
   return !probe_triggered;
 }
+
 
 /**
  * @brief Probe at the current XY (possibly more than once) to find the bed Z.
@@ -669,6 +669,7 @@ float Probe::probe_at_point(const float &rx, const float &ry, const ProbePtRaise
 
   // TODO: Adapt for SCARA, where the offset rotates
   xyz_pos_t npos = { rx, ry };
+  SERIAL_ECHOLNPAIR("ProbeX:", rx, " ProbeY:", ry, "Avtive:", probe_relative);
   if (probe_relative) {                                     // The given position is in terms of the probe
     if (!can_reach(npos)) {
       if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("Position Not Reachable");
@@ -691,6 +692,7 @@ float Probe::probe_at_point(const float &rx, const float &ry, const ProbePtRaise
   feedrate_mm_s = XY_PROBE_FEEDRATE_MM_S;
 
   // Move the probe to the starting XYZ
+  LOG_I("Move to X: %.2f, Y: %.2f, Z: %.2f\n", npos.x, npos.y, npos.z);
   do_blocking_move_to(npos);
 
   float measured_z = NAN;
@@ -710,7 +712,6 @@ float Probe::probe_at_point(const float &rx, const float &ry, const ProbePtRaise
 
   if (isnan(measured_z)) {
     stow();
-    LCD_MESSAGEPGM(MSG_LCD_PROBING_FAILED);
     #if DISABLED(G29_RETRY_AND_RECOVER)
       SERIAL_ERROR_MSG(STR_ERR_PROBING_FAILED);
     #endif

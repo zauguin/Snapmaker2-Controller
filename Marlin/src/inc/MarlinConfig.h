@@ -34,7 +34,7 @@
 #include "../pins/pins.h"
 
 #ifndef __MARLIN_DEPS__
-  #include HAL_PATH(../HAL, timers.h)
+  #include HAL_PATH(../HAL, HAL_timers.h)
   #include HAL_PATH(../HAL, spi_pins.h)
 #endif
 

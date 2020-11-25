@@ -23,10 +23,13 @@
 
 #include "../../../inc/MarlinConfigPre.h"
 
+#define GRID_MAX_POINTS_INDEX (GRID_MAX_POINTS_X * GRID_MAX_POINTS_Y)
+
 extern xy_pos_t bilinear_grid_spacing, bilinear_start;
 extern xy_float_t bilinear_grid_factor;
 extern bed_mesh_t z_values;
 float bilinear_z_offset(const xy_pos_t &raw);
+void bilinear_grid_manual();
 
 void extrapolate_unprobed_bed_level();
 void print_bilinear_leveling_grid();
@@ -43,3 +46,11 @@ void refresh_bed_level();
 #define _GET_MESH_X(I) float(bilinear_start.x + (I) * bilinear_grid_spacing.x)
 #define _GET_MESH_Y(J) float(bilinear_start.y + (J) * bilinear_grid_spacing.y)
 #define Z_VALUES_ARR  z_values
+
+#define MAX_NOZZLE_HEIGHT_PROBED  6
+extern float nozzle_height_probed;
+
+
+uint8_t auto_probing(bool reply_screen, bool fast_leveling);
+void compensate_offset();
+void compensate_offset(float offset);

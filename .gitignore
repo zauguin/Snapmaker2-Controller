@@ -37,7 +37,6 @@ applet/
 *.rej
 *.bak
 *.idea
-*.s
 *.i
 *.ii
 *.swp
@@ -145,6 +144,7 @@ Marlin/*/readme.txt
 Marlin/*/*/readme.txt
 Marlin/*/*/*/readme.txt
 Marlin/*/*/*/*/readme.txt
+snapmaker/scripts/env*.txt
 
 # Secure Credentials
 Configuration_Secure.h
@@ -184,3 +184,6 @@ cmake-build-*
 
 #Python
 __pycache__
+
+#SourceInsight
+Edit/

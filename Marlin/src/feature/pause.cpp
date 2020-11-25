@@ -55,8 +55,6 @@
   #include "../lcd/extui/ui_api.h"
 #endif
 
-#include "../lcd/ultralcd.h"
-
 #if HAS_BUZZER
   #include "../libs/buzzer.h"
 #endif
@@ -82,9 +80,6 @@ static xyze_pos_t resume_position;
 
 fil_change_settings_t fc_settings[EXTRUDERS];
 
-#if ENABLED(SDSUPPORT)
-  #include "../sd/cardreader.h"
-#endif
 
 #if ENABLED(EMERGENCY_PARSER)
   #define _PMSG(L) L##_M108
@@ -404,13 +399,6 @@ bool pause_print(const float &retract, const xyz_pos_t &park_point, const float 
   // Indicate that the printer is paused
   ++did_pause_print;
 
-  // Pause the print job and timer
-  #if ENABLED(SDSUPPORT)
-    if (IS_SD_PRINTING()) {
-      card.pauseSDPrint();
-      ++did_pause_print; // Indicate SD pause also
-    }
-  #endif
 
   print_job_timer.pause();
 
@@ -659,10 +647,6 @@ void resume_print(const float &slow_load_length/*=0*/, const float &fast_load_le
 
   TERN_(HOST_PROMPT_SUPPORT, host_prompt_open(PROMPT_INFO, PSTR("Resuming"), DISMISS_STR));
 
-  #if ENABLED(SDSUPPORT)
-    if (did_pause_print) { card.startFileprint(); --did_pause_print; }
-  #endif
-
   #if ENABLED(ADVANCED_PAUSE_FANS_PAUSE) && HAS_FAN
     thermalManager.set_fans_paused(false);
   #endif
@@ -671,9 +655,6 @@ void resume_print(const float &slow_load_length/*=0*/, const float &fast_load_le
 
   // Resume the print job timer if it was running
   if (print_job_timer.isPaused()) print_job_timer.start();
-
-  TERN_(HAS_DISPLAY, ui.reset_status());
-  TERN_(HAS_LCD_MENU, ui.return_to_status());
 }
 
 #endif // ADVANCED_PAUSE_FEATURE

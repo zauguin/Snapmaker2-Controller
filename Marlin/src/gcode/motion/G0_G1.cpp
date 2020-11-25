@@ -29,7 +29,6 @@
   #include "../../feature/fwretract.h"
 #endif
 
-#include "../../sd/cardreader.h"
 
 #if ENABLED(NANODLP_Z_SYNC)
   #include "../../module/stepper.h"
@@ -39,6 +38,7 @@ extern xyze_pos_t destination;
 
 #if ENABLED(VARIABLE_G0_FEEDRATE)
   feedRate_t fast_move_feedrate = MMM_TO_MMS(G0_FEEDRATE);
+  feedRate_t print_move_feedrate = MMM_TO_MMS(G0_FEEDRATE);
 #endif
 
 /**
@@ -62,6 +62,9 @@ void GcodeSuite::G0_G1(TERN_(HAS_FAST_MOVES, const bool fast_move/*=false*/)) {
           old_feedrate = feedrate_mm_s;             // Back up the (old) motion mode feedrate
           feedrate_mm_s = fast_move_feedrate;       // Get G0 feedrate from last usage
         }
+        else {
+          feedrate_mm_s = print_move_feedrate;
+        }
       #endif
     #endif
 
@@ -75,6 +78,9 @@ void GcodeSuite::G0_G1(TERN_(HAS_FAST_MOVES, const bool fast_move/*=false*/)) {
           old_feedrate = feedrate_mm_s;             // Back up the (new) motion mode feedrate
           feedrate_mm_s = MMM_TO_MMS(G0_FEEDRATE);  // Get the fixed G0 feedrate
         #endif
+      }
+      else {
+        print_move_feedrate = feedrate_mm_s;
       }
     #endif
 
@@ -94,6 +100,7 @@ void GcodeSuite::G0_G1(TERN_(HAS_FAST_MOVES, const bool fast_move/*=false*/)) {
       }
 
     #endif // FWRETRACT
+
 
     #if IS_SCARA
       fast_move ? prepare_fast_move_to_destination() : prepare_line_to_destination();

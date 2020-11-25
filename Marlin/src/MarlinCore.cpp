@@ -49,17 +49,20 @@
 #include "module/temperature.h"
 #include "module/settings.h"
 #include "module/printcounter.h" // PrintCounter or Stopwatch
+#include <EEPROM.h>
 
 #include "module/stepper.h"
 #include "module/stepper/indirection.h"
+
+#include HAL_PATH(HAL, HAL_breathlight_STM32F1.h)
 
 #include "gcode/gcode.h"
 #include "gcode/parser.h"
 #include "gcode/queue.h"
 
-#include "sd/cardreader.h"
+#include "snapmaker.h"
+#include "module/linear.h"
 
-#include "lcd/ultralcd.h"
 #if HAS_TOUCH_XPT2046
   #include "lcd/touch/touch_buttons.h"
 #endif
@@ -146,10 +149,6 @@
   #include "feature/spindle_laser.h"
 #endif
 
-#if ENABLED(SDSUPPORT)
-  CardReader card;
-#endif
-
 #if ENABLED(G38_PROBE_TARGET)
   uint8_t G38_move; // = 0
   bool G38_did_trigger; // = false
@@ -221,6 +220,18 @@
   #include "feature/password/password.h"
 #endif
 
+// mutex lock for gcode queue from HMI to marlin
+SemaphoreHandle_t gcode_queue_lock;
+
+//
+MessageBufferHandle_t hmi_queue;
+
+bool Running = true;
+
+#if ENABLED(TEMPERATURE_UNITS_SUPPORT)
+  TempUnit input_temp_units = TEMPUNIT_C;
+#endif
+
 PGMSTR(NUL_STR, "");
 PGMSTR(M112_KILL_STR, "M112 Shutdown");
 PGMSTR(G28_STR, "G28");
@@ -263,11 +274,80 @@ bool wait_for_heatup = true;
   I2CPositionEncodersMgr I2CPEM;
 #endif
 
+// Software machine size
+#if ENABLED(SW_MACHINE_SIZE)
+  // default will keep machine safe
+  bool X_DIR = false;
+  bool Y_DIR = false;
+  bool Z_DIR = false;
+  bool E_DIR = false;
+  signed char X_HOME_DIR = 1;
+  signed char Y_HOME_DIR = 1;
+  signed char Z_HOME_DIR = 1;
+  float X_MAX_POS = 150;
+  float Y_MAX_POS = 150;
+  float Z_MAX_POS = 150;
+  float X_MIN_POS = 0;
+  float Y_MIN_POS = 0;
+  float Z_MIN_POS = 0;
+
+  // Machine definition size
+  float X_DEF_SIZE = 145;
+  float Y_DEF_SIZE = 145;
+  float Z_DEF_SIZE = 145;
+
+  // heated bed magnet location
+  float MAGNET_X_SPAN = 114;
+  float MAGNET_Y_SPAN = 114;
+
+  float s_home_offset[XYZ] = S_HOME_OFFSET_DEFAULT;
+  float m_home_offset[XYZ] = M_HOME_OFFSET_DEFAULT;
+  float l_home_offset[XYZ] = L_HOME_OFFSET_DEFAULT;
+#endif //ENABLED(SW_MACHINE_SIZE)
+
+uint32_t GRID_MAX_POINTS_X;
+uint32_t GRID_MAX_POINTS_Y;
+uint32_t PROBE_MARGIN;
+
+
+uint32_t ABL_GRID_POINTS_VIRT_X;
+uint32_t ABL_GRID_POINTS_VIRT_Y;
+uint32_t ABL_TEMP_POINTS_X;
+uint32_t ABL_TEMP_POINTS_Y;
+
 /**
  * ***************************************************************************
  * ******************************** FUNCTIONS ********************************
  * ***************************************************************************
  */
+
+void reset_homeoffset() {
+  float s_home_offset_def[XYZ] = S_HOME_OFFSET_DEFAULT;
+  float m_home_offset_def[XYZ] = M_HOME_OFFSET_DEFAULT;
+  float l_home_offset_def[XYZ] = L_HOME_OFFSET_DEFAULT;
+
+  LOOP_XYZ(i) {
+    s_home_offset[i] = s_home_offset_def[i];
+    m_home_offset[i] = m_home_offset_def[i];
+    l_home_offset[i] = l_home_offset_def[i];
+  }
+
+  LOOP_XYZ(i) {
+    switch (linear.machine_size()) {
+      case MACHINE_SIZE_A150:
+        home_offset[i] = s_home_offset[i];
+        break;
+      case MACHINE_SIZE_A250:
+        home_offset[i] = m_home_offset[i];
+        break;
+      case MACHINE_SIZE_A350:
+        home_offset[i] = l_home_offset[i];
+        break;
+      default:
+        break;
+    }
+  }
+}
 
 void setup_killpin() {
   #if HAS_KILL
@@ -412,21 +492,21 @@ void disable_all_steppers() {
  * A Print Job exists when the timer is running or SD printing
  */
 bool printJobOngoing() {
-  return print_job_timer.isRunning() || IS_SD_PRINTING();
+  return print_job_timer.isRunning();
 }
 
 /**
  * Printing is active when the print job timer is running
  */
 bool printingIsActive() {
-  return !did_pause_print && (print_job_timer.isRunning() || IS_SD_PRINTING());
+  return !did_pause_print && systemservice.GetCurrentStage() == SYSTAGE_WORK;
 }
 
 /**
  * Printing is paused according to SD or host indicators
  */
 bool printingIsPaused() {
-  return did_pause_print || print_job_timer.isPaused() || IS_SD_PAUSED();
+  return did_pause_print && systemservice.GetCurrentStage() == SYSTAGE_PAUSE;
 }
 
 void startOrResumeJob() {
@@ -705,9 +785,6 @@ void idle(TERN_(ADVANCED_PAUSE_FEATURE, bool no_stepper_sleep/*=false*/)) {
   // Return if setup() isn't completed
   if (marlin_state == MF_INITIALIZING) return;
 
-  // Handle filament runout sensors
-  TERN_(HAS_FILAMENT_SENSOR, runout.run());
-
   // Run HAL idle tasks
   #ifdef HAL_IDLETASK
     HAL_idletask();
@@ -741,9 +818,6 @@ void idle(TERN_(ADVANCED_PAUSE_FEATURE, bool no_stepper_sleep/*=false*/)) {
   // Update the Beeper queue
   TERN_(USE_BEEPER, buzzer.tick());
 
-  // Handle UI input / draw events
-  TERN(DWIN_CREALITY_LCD, DWIN_Update(), ui.update());
-
   // Run i2c Position Encoders
   #if ENABLED(I2C_POSITION_ENCODERS)
     static millis_t i2cpem_next_update_ms;
@@ -776,6 +850,9 @@ void idle(TERN_(ADVANCED_PAUSE_FEATURE, bool no_stepper_sleep/*=false*/)) {
   #if HAS_TFT_LVGL_UI
     LV_TASK_HANDLER();
   #endif
+
+  if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)
+    vTaskDelay(portTICK_PERIOD_MS);
 }
 
 /**
@@ -842,7 +919,7 @@ void minkill(const bool steppers_off/*=false*/) {
 
   #else
 
-    for (;;) watchdog_refresh();  // Wait for reset
+    watchdog_refresh();  // Wait for reset
 
   #endif
 }
@@ -861,7 +938,6 @@ void stop() {
 
   if (IsRunning()) {
     SERIAL_ERROR_MSG(STR_ERR_STOPPED);
-    LCD_MESSAGEPGM(MSG_STOPPED);
     safe_delay(350);       // allow enough time for messages to get out before stopping
     marlin_state = MF_STOPPED;
   }
@@ -965,6 +1041,7 @@ void setup() {
     #endif
   #endif
 
+  nvic_irq_set_priority(MYSERIAL0.c_dev()->irq_num, MARLIN_SERIAL_IRQ_PRIORITY);
   MYSERIAL0.begin(BAUDRATE);
   uint32_t serial_connect_timeout = millis() + 1000UL;
   while (!MYSERIAL0 && PENDING(millis(), serial_connect_timeout)) { /*nada*/ }
@@ -984,6 +1061,8 @@ void setup() {
 
   SETUP_RUN(HAL_init());
 
+  SETUP_RUN(SnapmakerSetupEarly());
+
   #if HAS_L64XX
     SETUP_RUN(L64xxManager.init());  // Set up SPI, init drivers
   #endif
@@ -994,7 +1073,12 @@ void setup() {
 
   #if HAS_FILAMENT_SENSOR
     SETUP_RUN(runout.setup());
+    // enable by default
+    runout.enabled = true;
   #endif
+
+  // Extruder Power
+  SETUP_RUN(OUT_WRITE(PB10, false));
 
   #if ENABLED(POWER_LOSS_RECOVERY)
     SETUP_RUN(recovery.setup());
@@ -1038,6 +1122,8 @@ void setup() {
   serialprintPGM(GET_TEXT(MSG_MARLIN));
   SERIAL_CHAR(' ');
   SERIAL_ECHOLNPGM(SHORT_BUILD_VERSION);
+    SERIAL_CHAR(' ');
+  SERIAL_ECHO_MSG("Compiled: " __DATE__);
   SERIAL_EOL();
   #if defined(STRING_DISTRIBUTION_DATE) && defined(STRING_CONFIG_H_AUTHOR)
     SERIAL_ECHO_MSG(
@@ -1066,23 +1152,6 @@ void setup() {
     SETUP_RUN(controllerFan.setup());
   #endif
 
-  // UI must be initialized before EEPROM
-  // (because EEPROM code calls the UI).
-
-  #if ENABLED(DWIN_CREALITY_LCD)
-    delay(800);   // Required delay (since boot?)
-    SERIAL_ECHOPGM("\nDWIN handshake ");
-    if (DWIN_Handshake()) SERIAL_ECHOLNPGM("ok."); else SERIAL_ECHOLNPGM("error.");
-    DWIN_Frame_SetDir(1); // Orientation 90°
-    DWIN_UpdateLCD();     // Show bootscreen (first image)
-  #else
-    SETUP_RUN(ui.init());
-    #if HAS_WIRED_LCD && ENABLED(SHOW_BOOTSCREEN)
-      SETUP_RUN(ui.show_bootscreen());
-    #endif
-    SETUP_RUN(ui.reset_status());     // Load welcome message early. (Retained if no errors exist.)
-  #endif
-
   #if BOTH(SDSUPPORT, SDCARD_EEPROM_EMULATION)
     SETUP_RUN(card.mount());          // Mount media with settings before first_load
   #endif
@@ -1103,6 +1172,9 @@ void setup() {
   SETUP_RUN(print_job_timer.init());  // Initial setup of print job timer
 
   SETUP_RUN(endstops.init());         // Init endstops and pullups
+
+  // only enable Z probe in leveling
+  SETUP_RUN(endstops.enable_z_probe(false));
 
   SETUP_RUN(stepper.init());          // Init stepper. This enables interrupts!
 
@@ -1288,39 +1360,20 @@ void setup() {
     SETUP_RUN(password.lock_machine());      // Will not proceed until correct password provided
   #endif
 
+  // reset bed leveling data to avoid toolhead hit heatbed without Calibration.
+  reset_bed_level_if_upgraded();
+
   marlin_state = MF_RUNNING;
 
   SETUP_LOG("setup() completed.");
+
+  SnapmakerSetupPost();
 }
 
 /**
- * The main Marlin program loop
- *
- *  - Call idle() to handle all tasks between G-code commands
- *      Note that no G-codes from the queue can be executed during idle()
- *      but many G-codes can be called directly anytime like macros.
- *  - Check whether SD card auto-start is needed now.
- *  - Check whether SD print finishing is needed now.
- *  - Run one G-code command from the immediate or main command queue
- *    and open up one space. Commands in the main queue may come from sd
- *    card, host, or by direct injection. The queue will continue to fill
- *    as long as idle() or manage_inactivity() are being called.
+ * do not place any code here
+ * this function won't be executed!
  */
 void loop() {
-  do {
-    idle();
-
-    #if ENABLED(SDSUPPORT)
-      card.checkautostart();
-      if (card.flag.abort_sd_printing) abortSDPrinting();
-      if (marlin_state == MF_SD_COMPLETE) finishSDPrinting();
-    #endif
-
-    queue.advance();
-
-    endstops.event_handler();
-
-    TERN_(HAS_TFT_LVGL_UI, printer_state_polling());
-
-  } while (ENABLED(__AVR__)); // Loop forever on slower (AVR) boards
+  return;
 }

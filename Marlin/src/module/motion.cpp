@@ -512,6 +512,15 @@ void do_z_clearance(const float &zclear, const bool z_known/*=true*/, const bool
   if (!lower_allowed) NOLESS(zdest, current_position.z);
   do_blocking_move_to_z(_MIN(zdest, Z_MAX_POS), MMM_TO_MMS(TERN(HAS_BED_PROBE, Z_PROBE_SPEED_FAST, HOMING_FEEDRATE_Z)));
 }
+void do_blocking_move_to_logical_x(const float &rx, const float &fr_mm_s/*=0.0*/) {
+  do_blocking_move_to(RAW_X_POSITION(rx), current_position[Y_AXIS], current_position[Z_AXIS], fr_mm_s);
+}
+void do_blocking_move_to_logical_z(const float &rz, const float &fr_mm_s/*=0.0*/) {
+  do_blocking_move_to(current_position[X_AXIS], current_position[Y_AXIS], RAW_Z_POSITION(rz), fr_mm_s);
+}
+void do_blocking_move_to_logical_xy(const float &rx, const float &ry, const float &fr_mm_s/*=0.0*/) {
+  do_blocking_move_to(RAW_X_POSITION(rx), RAW_Y_POSITION(ry), current_position[Z_AXIS], fr_mm_s);
+}
 
 //
 // Prepare to do endstop or probe moves with custom feedrates.
@@ -1128,12 +1137,12 @@ bool homing_needed_error(uint8_t axis_bits/*=0x07*/) {
 /**
  * Homing bump feedrate (mm/s)
  */
+extern uint8_t sm_homing_bump_divisor[XYZ];
 feedRate_t get_homing_bump_feedrate(const AxisEnum axis) {
   #if HOMING_Z_WITH_PROBE
     if (axis == Z_AXIS) return MMM_TO_MMS(Z_PROBE_SPEED_SLOW);
   #endif
-  static const uint8_t homing_bump_divisor[] PROGMEM = HOMING_BUMP_DIVISOR;
-  uint8_t hbd = pgm_read_byte(&homing_bump_divisor[axis]);
+  uint8_t hbd = sm_homing_bump_divisor[axis];
   if (hbd < 1) {
     hbd = 10;
     SERIAL_ECHO_MSG("Warning: Homing Bump Divisor < 1");
@@ -1541,13 +1550,17 @@ void homeaxis(const AxisEnum axis) {
     // Only Z homing (with probe) is permitted
     if (axis != Z_AXIS) { BUZZ(100, 880); return; }
   #else
-    #define _CAN_HOME(A) (axis == _AXIS(A) && ( \
-         ENABLED(A##_SPI_SENSORLESS) \
-      || (_AXIS(A) == Z_AXIS && ENABLED(HOMING_Z_WITH_PROBE)) \
-      || (A##_MIN_PIN > -1 && A##_HOME_DIR < 0) \
-      || (A##_MAX_PIN > -1 && A##_HOME_DIR > 0) \
-    ))
-    if (!_CAN_HOME(X) && !_CAN_HOME(Y) && !_CAN_HOME(Z)) return;
+    /*
+    #if DISABLED(PERIPH_CAN_SUPPORT)
+      #define _CAN_HOME(A) (axis == _AXIS(A) && ( \
+           ENABLED(A##_SPI_SENSORLESS) \
+        || (_AXIS(A) == Z_AXIS && ENABLED(HOMING_Z_WITH_PROBE)) \
+        || (A##_MIN_PIN > -1 && A##_HOME_DIR < 0) \
+        || (A##_MAX_PIN > -1 && A##_HOME_DIR > 0) \
+      ))
+      if (!_CAN_HOME(X) && !_CAN_HOME(Y) && !_CAN_HOME(Z)) return;
+    #endif
+    */
   #endif
 
   if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPAIR(">>> homeaxis(", axis_codes[axis], ")");
@@ -1633,6 +1646,9 @@ void homeaxis(const AxisEnum axis) {
       if (axis == Z_AXIS) bltouch.stow(); // The final STOW
     #endif
   }
+
+
+  do_homing_move(axis, axis_home_dir * -3, get_homing_bump_feedrate(axis));
 
   #if HAS_EXTRA_ENDSTOPS
     const bool pos_dir = axis_home_dir > 0;
@@ -1794,7 +1810,9 @@ void homeaxis(const AxisEnum axis) {
     }
 
   #else // CARTESIAN / CORE / MARKFORGED_XY
-
+    //Move foward about mm
+    //current_position[axis] -= home_dir(axis) * 0.5f;
+    //do_blocking_move_to(current_position, 10);
     set_axis_is_at_home(axis);
     sync_plan_position();
 
@@ -1857,3 +1875,54 @@ void homeaxis(const AxisEnum axis) {
     update_workspace_offset(axis);
   }
 #endif // HAS_M206_COMMAND
+
+#if ENABLED(SW_MACHINE_SIZE)
+  /**
+   * Update the machine Size, Motor Dir, maxlen
+   */
+  void UpdateMachineDefines()
+  {
+    #if ENABLED(MIN_SOFTWARE_ENDSTOPS)
+      soft_endstop.min = xyz_pos_t{base_min_pos(X_AXIS), base_min_pos(Y_AXIS), base_min_pos(Z_AXIS)};
+    #endif
+    #if ENABLED(MAX_SOFTWARE_ENDSTOPS)
+      soft_endstop.max = xyz_pos_t{base_max_pos(X_AXIS), base_max_pos(Y_AXIS), base_max_pos(Z_AXIS)};
+    #endif
+
+    #if ENABLED(AUTO_BED_LEVELING_BILINEAR)
+      SERIAL_ECHOLN("grid manual");
+      bilinear_grid_manual();
+    #endif
+    do_blocking_move_to(current_position[X_AXIS] +0.05f, current_position[Y_AXIS] +0.05f, current_position[Z_AXIS] +0.05f, 16);
+    do_blocking_move_to(current_position[X_AXIS] -0.05f, current_position[Y_AXIS] -0.05f, current_position[Z_AXIS] -0.05f, 16);
+  }
+#endif // ENABLED(SW_MACHINE_SIZE)
+
+void  move_to_limited_position(const float (&target)[XYZE], const float fr_mm_s) {
+  const float z_feedrate  = fr_mm_s ? fr_mm_s : homing_feedrate(Z_AXIS),
+            xy_feedrate = fr_mm_s ? fr_mm_s : XY_PROBE_FEEDRATE_MM_S;
+
+  xyz_pos_t dest = {target[X_AXIS], target[Y_AXIS], target[Z_AXIS]};
+  apply_motion_limits(dest);
+
+  // If Z needs to raise, do it before moving XY
+  if (current_position[Z_AXIS] < dest[Z_AXIS]) {
+    current_position[Z_AXIS] = dest[Z_AXIS];
+    line_to_current_position(z_feedrate);
+  }
+
+  current_position[X_AXIS] = dest[X_AXIS];
+  current_position[Y_AXIS] = dest[Y_AXIS];
+  line_to_current_position(xy_feedrate);
+
+  // If Z needs to lower, do it after moving XY
+  if (current_position[Z_AXIS] > dest[Z_AXIS]) {
+    current_position[Z_AXIS] = dest[Z_AXIS];
+    line_to_current_position(z_feedrate);
+  }
+
+  if (current_position[E_AXIS] != target[E_AXIS]) {
+    current_position[E_AXIS] = target[E_AXIS];
+    line_to_current_position(z_feedrate);
+  }
+}

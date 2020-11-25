@@ -40,6 +40,9 @@ constexpr uint8_t xyz_bits = _BV(X_AXIS) | _BV(Y_AXIS) | _BV(Z_AXIS);
 FORCE_INLINE bool no_axes_homed() { return !axis_homed; }
 FORCE_INLINE bool all_axes_homed() { return (axis_homed & xyz_bits) == xyz_bits; }
 FORCE_INLINE bool all_axes_known() { return (axis_known_position & xyz_bits) == xyz_bits; }
+#define axes_homed(axis) (axis_homed & _BV(axis))
+#define axes_known(axis) (axis_known_position & _BV(axis))
+
 FORCE_INLINE void set_all_homed() { axis_homed = axis_known_position = xyz_bits; }
 FORCE_INLINE void set_all_unhomed() { axis_homed = axis_known_position = 0; }
 
@@ -87,7 +90,9 @@ extern xyz_pos_t cartes;
  * but the planner and stepper like mm/s units.
  */
 extern const feedRate_t homing_feedrate_mm_s[XYZ];
-FORCE_INLINE feedRate_t homing_feedrate(const AxisEnum a) { return pgm_read_float(&homing_feedrate_mm_s[a]); }
+extern feedRate_t sm_homing_feedrate[XYZ];
+FORCE_INLINE feedRate_t homing_feedrate(const AxisEnum a) { return sm_homing_feedrate[a]; }
+feedRate_t get_homing_bump_feedrate(const AxisEnum axis);
 feedRate_t get_homing_bump_feedrate(const AxisEnum axis);
 
 extern feedRate_t feedrate_mm_s;
@@ -117,11 +122,23 @@ extern int16_t feedrate_percentage;
 inline float pgm_read_any(const float *p)   { return TERN(__IMXRT1062__, *p, pgm_read_float(p)); }
 inline int8_t pgm_read_any(const int8_t *p) { return TERN(__IMXRT1062__, *p, pgm_read_byte(p)); }
 
-#define XYZ_DEFS(T, NAME, OPT) \
-  inline T NAME(const AxisEnum axis) { \
-    static const XYZval<T> NAME##_P DEFS_PROGMEM = { X_##OPT, Y_##OPT, Z_##OPT }; \
-    return pgm_read_any(&NAME##_P[axis]); \
-  }
+#if DISABLED(SW_MACHINE_SIZE)
+  #define XYZ_DEFS(T, NAME, OPT) \
+    inline T NAME(const AxisEnum axis) { \
+      static const XYZval<T> NAME##_P DEFS_PROGMEM = { X_##OPT, Y_##OPT, Z_##OPT }; \
+      return pgm_read_any(&NAME##_P[axis]); \
+    }
+#else
+  #define XYZ_DEFS(T, NAME, OPT) \
+    inline T NAME(const AxisEnum axis) { \
+      switch(axis) { \
+        case X_AXIS: return X_##OPT; \
+        case Y_AXIS: return Y_##OPT; \
+        case Z_AXIS: return Z_##OPT; \
+        default: __builtin_unreachable(); \
+      } \
+    }
+#endif
 XYZ_DEFS(float, base_min_pos,   MIN_POS);
 XYZ_DEFS(float, base_max_pos,   MAX_POS);
 XYZ_DEFS(float, base_home_pos,  HOME_POS);
@@ -268,6 +285,10 @@ FORCE_INLINE void do_blocking_move_to_xy(const xyze_pos_t &raw, const feedRate_t
 void do_blocking_move_to_xy_z(const xy_pos_t &raw, const float &z, const feedRate_t &fr_mm_s=0.0f);
 FORCE_INLINE void do_blocking_move_to_xy_z(const xyz_pos_t &raw, const float &z, const feedRate_t &fr_mm_s=0.0f)  { do_blocking_move_to_xy_z(xy_pos_t(raw), z, fr_mm_s); }
 FORCE_INLINE void do_blocking_move_to_xy_z(const xyze_pos_t &raw, const float &z, const feedRate_t &fr_mm_s=0.0f) { do_blocking_move_to_xy_z(xy_pos_t(raw), z, fr_mm_s); }
+
+void do_blocking_move_to_logical_x(const float &rx, const feedRate_t &fr_mm_s=0);
+void do_blocking_move_to_logical_z(const float &rz, const feedRate_t &fr_mm_s=0);
+void do_blocking_move_to_logical_xy(const float &rx, const float &ry, const feedRate_t &fr_mm_s=0);
 
 void remember_feedrate_and_scaling();
 void remember_feedrate_scaling_off();
@@ -430,6 +451,32 @@ bool homing_needed_error(uint8_t axis_bits=0x07);
 #if HAS_M206_COMMAND
   void set_home_offset(const AxisEnum axis, const float v);
 #endif
+
+#if ENABLED(SW_MACHINE_SIZE)
+  void UpdateMachineDefines(void);
+#endif
+
+void  move_to_limited_position(const float  (&target)[XYZE], const float fr_mm_s);
+
+FORCE_INLINE void  move_to_limited_z(const float z, const float fr_mm_s) {
+  float target[XYZE] = {current_position[X_AXIS], current_position[Y_AXIS], z, current_position[E_AXIS]};
+  move_to_limited_position(target, fr_mm_s);
+}
+
+FORCE_INLINE void  move_to_limited_ze(const float z, const float e, const float fr_mm_s) {
+  float target[XYZE] = {current_position[X_AXIS], current_position[Y_AXIS], z, e};
+  move_to_limited_position(target, fr_mm_s);
+}
+
+FORCE_INLINE void  move_to_limited_xy(const float x, const float y, const float fr_mm_s) {
+  float target[XYZE] = {x, y, current_position[Z_AXIS], current_position[E_AXIS]};
+  move_to_limited_position(target, fr_mm_s);
+}
+
+FORCE_INLINE void  move_to_limited_x(const float x, const float fr_mm_s) {
+  float target[XYZE] = {x, current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]};
+  move_to_limited_position(target, fr_mm_s);
+}
 
 #if USE_SENSORLESS
   struct sensorless_t;

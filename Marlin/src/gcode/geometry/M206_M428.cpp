@@ -26,8 +26,9 @@
 
 #include "../gcode.h"
 #include "../../module/motion.h"
-#include "../../lcd/ultralcd.h"
 #include "../../libs/buzzer.h"
+
+#include "../snapmaker/src/module/linear.h"
 
 /**
  * M206: Set Additional Homing Offset (X Y Z). SCARA aliases T=X, P=Y
@@ -38,8 +39,25 @@
  */
 void GcodeSuite::M206() {
   LOOP_XYZ(i)
-    if (parser.seen(XYZ_CHAR(i)))
+    if (parser.seen(XYZ_CHAR(i))) {
       set_home_offset((AxisEnum)i, parser.value_linear_units());
+      switch (linear.machine_size()) {
+        case MACHINE_SIZE_A150:
+          s_home_offset[i] = home_offset[i];
+          break;
+
+        case MACHINE_SIZE_A250:
+          m_home_offset[i] = home_offset[i];
+          break;
+
+        case MACHINE_SIZE_A350:
+          l_home_offset[i] = home_offset[i];
+          break;
+
+        default:
+          break;
+      }
+    }
 
   #if ENABLED(MORGAN_SCARA)
     if (parser.seen('T')) set_home_offset(A_AXIS, parser.value_float()); // Theta
@@ -70,7 +88,6 @@ void GcodeSuite::M428() {
       diff[i] = -current_position[i];
     if (!WITHIN(diff[i], -20, 20)) {
       SERIAL_ERROR_MSG(STR_ERR_M428_TOO_FAR);
-      LCD_ALERTMESSAGEPGM_P(PSTR("Err: Too far!"));
       BUZZ(200, 40);
       return;
     }
@@ -78,7 +95,6 @@ void GcodeSuite::M428() {
 
   LOOP_XYZ(i) set_home_offset((AxisEnum)i, diff[i]);
   report_current_position();
-  LCD_MESSAGEPGM(MSG_HOME_OFFSETS_APPLIED);
   BUZZ(100, 659);
   BUZZ(100, 698);
 }

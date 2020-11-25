@@ -28,9 +28,11 @@
 #include "stepper.h"
 
 #include "../MarlinCore.h"
-#include "../sd/cardreader.h"
 #include "temperature.h"
-#include "../lcd/ultralcd.h"
+#include "src/libs/hex_print.h"
+
+#include "../snapmaker/src/module/toolhead_3dp.h"
+#include "../snapmaker/src/module/linear.h"
 
 #if ENABLED(ENDSTOP_INTERRUPTS_FEATURE)
   #include HAL_PATH(../HAL, endstop_interrupts.h)
@@ -54,8 +56,10 @@ Endstops endstops;
 
 bool Endstops::enabled, Endstops::enabled_globally; // Initialized by settings.load()
 volatile uint8_t Endstops::hit_state;
+uint8_t Endstops::prev_hit_state;
 
 Endstops::esbits_t Endstops::live_state = 0;
+
 
 #if ENDSTOP_NOISE_THRESHOLD
   Endstops::esbits_t Endstops::validated_live_state;
@@ -95,8 +99,7 @@ Endstops::esbits_t Endstops::live_state = 0;
  */
 
 void Endstops::init() {
-
-  #if HAS_X_MIN
+  #if HAS_X_MIN && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #if ENABLED(ENDSTOPPULLUP_XMIN)
       SET_INPUT_PULLUP(X_MIN_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_XMIN)
@@ -105,8 +108,9 @@ void Endstops::init() {
       SET_INPUT(X_MIN_PIN);
     #endif
   #endif
+  
 
-  #if HAS_X2_MIN
+  #if HAS_X2_MIN && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #if ENABLED(ENDSTOPPULLUP_XMIN)
       SET_INPUT_PULLUP(X2_MIN_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_XMIN)
@@ -115,8 +119,9 @@ void Endstops::init() {
       SET_INPUT(X2_MIN_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Y_MIN
+  #if HAS_Y_MIN && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #if ENABLED(ENDSTOPPULLUP_YMIN)
       SET_INPUT_PULLUP(Y_MIN_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_YMIN)
@@ -125,8 +130,9 @@ void Endstops::init() {
       SET_INPUT(Y_MIN_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Y2_MIN
+  #if HAS_Y2_MIN && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #if ENABLED(ENDSTOPPULLUP_YMIN)
       SET_INPUT_PULLUP(Y2_MIN_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_YMIN)
@@ -135,8 +141,9 @@ void Endstops::init() {
       SET_INPUT(Y2_MIN_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Z_MIN
+  #if HAS_Z_MIN && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #if ENABLED(ENDSTOPPULLUP_ZMIN)
       SET_INPUT_PULLUP(Z_MIN_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_ZMIN)
@@ -145,8 +152,9 @@ void Endstops::init() {
       SET_INPUT(Z_MIN_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Z2_MIN
+  #if HAS_Z2_MIN && DISABLED(CAN_ENDSTOP_Z2_MIN)
     #if ENABLED(ENDSTOPPULLUP_ZMIN)
       SET_INPUT_PULLUP(Z2_MIN_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_ZMIN)
@@ -155,8 +163,9 @@ void Endstops::init() {
       SET_INPUT(Z2_MIN_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Z3_MIN
+  #if HAS_Z3_MIN && DISABLED(CAN_ENDSTOP_Z3_MIN)
     #if ENABLED(ENDSTOPPULLUP_ZMIN)
       SET_INPUT_PULLUP(Z3_MIN_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_ZMIN)
@@ -165,8 +174,9 @@ void Endstops::init() {
       SET_INPUT(Z3_MIN_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Z4_MIN
+  #if HAS_Z4_MIN && DISABLED(CAN_ENDSTOP_Z3_MIN)
     #if ENABLED(ENDSTOPPULLUP_ZMIN)
       SET_INPUT_PULLUP(Z4_MIN_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_ZMIN)
@@ -176,7 +186,8 @@ void Endstops::init() {
     #endif
   #endif
 
-  #if HAS_X_MAX
+
+  #if HAS_X_MAX && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #if ENABLED(ENDSTOPPULLUP_XMAX)
       SET_INPUT_PULLUP(X_MAX_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_XMAX)
@@ -185,8 +196,9 @@ void Endstops::init() {
       SET_INPUT(X_MAX_PIN);
     #endif
   #endif
+  
 
-  #if HAS_X2_MAX
+  #if HAS_X2_MAX && DISABLED(CAN_ENDSTOP_X2_MAX)
     #if ENABLED(ENDSTOPPULLUP_XMAX)
       SET_INPUT_PULLUP(X2_MAX_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_XMAX)
@@ -195,8 +207,9 @@ void Endstops::init() {
       SET_INPUT(X2_MAX_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Y_MAX
+  #if HAS_Y_MAX && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #if ENABLED(ENDSTOPPULLUP_YMAX)
       SET_INPUT_PULLUP(Y_MAX_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_YMAX)
@@ -205,8 +218,9 @@ void Endstops::init() {
       SET_INPUT(Y_MAX_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Y2_MAX
+  #if HAS_Y2_MAX && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #if ENABLED(ENDSTOPPULLUP_YMAX)
       SET_INPUT_PULLUP(Y2_MAX_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_YMAX)
@@ -215,8 +229,9 @@ void Endstops::init() {
       SET_INPUT(Y2_MAX_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Z_MAX
+  #if HAS_Z_MAX && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #if ENABLED(ENDSTOPPULLUP_ZMAX)
       SET_INPUT_PULLUP(Z_MAX_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_ZMAX)
@@ -225,8 +240,9 @@ void Endstops::init() {
       SET_INPUT(Z_MAX_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Z2_MAX
+  #if HAS_Z2_MAX && DISABLED(CAN_ENDSTOP_Z2_MAX)
     #if ENABLED(ENDSTOPPULLUP_ZMAX)
       SET_INPUT_PULLUP(Z2_MAX_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_ZMAX)
@@ -235,8 +251,9 @@ void Endstops::init() {
       SET_INPUT(Z2_MAX_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Z3_MAX
+  #if HAS_Z3_MAX && DISABLED(CAN_ENDSTOP_Z3_MAX)
     #if ENABLED(ENDSTOPPULLUP_ZMAX)
       SET_INPUT_PULLUP(Z3_MAX_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_ZMAX)
@@ -245,8 +262,9 @@ void Endstops::init() {
       SET_INPUT(Z3_MAX_PIN);
     #endif
   #endif
+  
 
-  #if HAS_Z4_MAX
+  #if HAS_Z4_MAX && DISABLED(CAN_ENDSTOP_Z4_MAX)
     #if ENABLED(ENDSTOPPULLUP_ZMAX)
       SET_INPUT_PULLUP(Z4_MAX_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_ZMAX)
@@ -266,7 +284,7 @@ void Endstops::init() {
     #endif
   #endif
 
-  #if HAS_CUSTOM_PROBE_PIN
+  #if HAS_CUSTOM_PROBE_PIN && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #if ENABLED(ENDSTOPPULLUP_ZMIN_PROBE)
       SET_INPUT_PULLUP(Z_MIN_PROBE_PIN);
     #elif ENABLED(ENDSTOPPULLDOWN_ZMIN_PROBE)
@@ -275,6 +293,7 @@ void Endstops::init() {
       SET_INPUT(Z_MIN_PROBE_PIN);
     #endif
   #endif
+  
 
   TERN_(ENDSTOP_INTERRUPTS_FEATURE, setup_endstop_interrupts());
 
@@ -347,7 +366,6 @@ void Endstops::resync() {
 #endif
 
 void Endstops::event_handler() {
-  static uint8_t prev_hit_state; // = 0
   if (hit_state == prev_hit_state) return;
   prev_hit_state = hit_state;
   if (hit_state) {
@@ -370,17 +388,19 @@ void Endstops::event_handler() {
     #define ENDSTOP_HIT_TEST_Y() _ENDSTOP_HIT_TEST(Y,'Y')
     #define ENDSTOP_HIT_TEST_Z() _ENDSTOP_HIT_TEST(Z,'Z')
 
-    SERIAL_ECHO_START();
-    SERIAL_ECHOPGM(STR_ENDSTOPS_HIT);
-    ENDSTOP_HIT_TEST_X();
-    ENDSTOP_HIT_TEST_Y();
-    ENDSTOP_HIT_TEST_Z();
+    if (0) {
+      SERIAL_ECHO_START();
+      SERIAL_ECHOPGM(STR_ENDSTOPS_HIT);
+      ENDSTOP_HIT_TEST_X();
+      ENDSTOP_HIT_TEST_Y();
+      ENDSTOP_HIT_TEST_Z();
 
-    #if HAS_CUSTOM_PROBE_PIN
-      #define P_AXIS Z_AXIS
-      if (TEST(hit_state, Z_MIN_PROBE)) _ENDSTOP_HIT_ECHO(P, 'P');
-    #endif
-    SERIAL_EOL();
+      #if HAS_CUSTOM_PROBE_PIN
+        #define P_AXIS Z_AXIS
+        if (TEST(hit_state, Z_MIN_PROBE)) _ENDSTOP_HIT_ECHO(P, 'P');
+      #endif
+      SERIAL_EOL();
+    }
 
     TERN_(HAS_WIRED_LCD, ui.status_printf_P(0, PSTR(S_FMT " %c %c %c %c"), GET_TEXT(MSG_LCD_ENDSTOPS), chrX, chrY, chrZ, chrP));
 
@@ -402,78 +422,143 @@ static void print_es_state(const bool is_hit, PGM_P const label=nullptr) {
   SERIAL_EOL();
 }
 
+#include "../feature/runout.h"
 void _O2 Endstops::report_states() {
   TERN_(BLTOUCH, bltouch._set_SW_mode());
   SERIAL_ECHOLNPGM(STR_M119_REPORT);
+
+  #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    #define ES_REPORT_LINEAR(S) print_es_state(linear.GetEndstopBit(S) != S##_ENDSTOP_INVERTING, PSTR(STR_##S))
+
+    ES_REPORT_LINEAR(X_MIN);
+    ES_REPORT_LINEAR(X_MAX);
+    ES_REPORT_LINEAR(Y_MIN);
+    ES_REPORT_LINEAR(Y_MAX);
+    ES_REPORT_LINEAR(Z_MIN);
+    ES_REPORT_LINEAR(Z_MAX);
+    print_es_state(TEST(printer1->probe_state(), 0) != Z_MIN_PROBE_ENDSTOP_INVERTING, PSTR(STR_Z_PROBE));
+    print_es_state(TEST(printer1->filament_state(), 0) != FIL_RUNOUT_STATE, PSTR(STR_FILAMENT_RUNOUT_SENSOR));
+  #else
+
+
   #define ES_REPORT(S) print_es_state(READ(S##_PIN) != S##_ENDSTOP_INVERTING, PSTR(STR_##S))
-  #if HAS_X_MIN
+  #define ES_REPORT_CAN(S) print_es_state(((CanModules.Endstop & _BV(S)) == 0) == S##_ENDSTOP_INVERTING, PSTR(STR_##S))
+  #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    ES_REPORT_CAN(X_MIN);
+  #elif HAS_X_MIN
     ES_REPORT(X_MIN);
+  #else
+    SERIAL_ECHOLNPGM("X_MIN_PIN not existing");
   #endif
-  #if HAS_X2_MIN
+  #if defined(CAN_ENDSTOP_X2_MIN)
+    ES_REPORT_CAN(X2_MIN);
+  #elif HAS_X2_MIN
     ES_REPORT(X2_MIN);
   #endif
-  #if HAS_X_MAX
+  #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    ES_REPORT_CAN(X_MAX);
+  #elif HAS_X_MAX
     ES_REPORT(X_MAX);
   #endif
-  #if HAS_X2_MAX
+  #if defined(CAN_ENDSTOP_X2_MAX)
+    ES_REPORT_CAN(X2_MAX);
+  #elif HAS_X2_MAX
     ES_REPORT(X2_MAX);
   #endif
-  #if HAS_Y_MIN
+  #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    ES_REPORT_CAN(Y_MIN);
+  #elif HAS_Y_MIN
     ES_REPORT(Y_MIN);
   #endif
-  #if HAS_Y2_MIN
+  #if defined(CAN_ENDSTOP_Y2_MIN)
+    ES_REPORT_CAN(Y2_MIN);
+  #elif HAS_Y2_MIN
     ES_REPORT(Y2_MIN);
   #endif
-  #if HAS_Y_MAX
+  #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    ES_REPORT_CAN(Y_MAX);
+  #elif HAS_Y_MAX
     ES_REPORT(Y_MAX);
   #endif
-  #if HAS_Y2_MAX
-    ES_REPORT(Y2_MAX);
+  #if defined(CAN_ENDSTOP_Y2_MAX)
+    ES_REPORT_CAN(Y2_MAX);
+  #elif HAS_Y2_MAX
+    ES_REPORT(Y_MAX);
   #endif
-  #if HAS_Z_MIN
+  #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    ES_REPORT_CAN(Z_MIN);
+  #elif HAS_Z_MIN
     ES_REPORT(Z_MIN);
   #endif
-  #if HAS_Z2_MIN
+  #if defined(CAN_ENDSTOP_Z2_MIN)
+    ES_REPORT_CAN(Z2_MIN);
+  #elif HAS_Z2_MIN
     ES_REPORT(Z2_MIN);
   #endif
-  #if HAS_Z3_MIN
+  #if defined(CAN_ENDSTOP_Z3_MIN)
+    ES_REPORT_CAN(Z3_MIN);
+  #elif HAS_Z3_MIN
     ES_REPORT(Z3_MIN);
   #endif
-  #if HAS_Z4_MIN
+  #if defined(CAN_ENDSTOP_Z4_MIN)
+    ES_REPORT_CAN(Z4_MIN);
+  #elif HAS_Z4_MIN
     ES_REPORT(Z4_MIN);
   #endif
-  #if HAS_Z_MAX
+  #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    ES_REPORT_CAN(Z_MAX);
+  #elif HAS_Z_MAX
     ES_REPORT(Z_MAX);
   #endif
-  #if HAS_Z2_MAX
+  #if defined(CAN_ENDSTOP_Z2_MAX)
+    ES_REPORT_CAN(Z2_MAX);
+  #elif HAS_Z2_MAX
     ES_REPORT(Z2_MAX);
   #endif
-  #if HAS_Z3_MAX
+  #if defined(CAN_ENDSTOP_Z3_MAX)
+    ES_REPORT_CAN(Z3_MAX);
+  #elif HAS_Z3_MAX
     ES_REPORT(Z3_MAX);
   #endif
-  #if HAS_Z4_MAX
+  #if defined(CAN_ENDSTOP_Z4_MAX)
+    ES_REPORT_CAN(Z4_MAX);
+  #elif HAS_Z4_MAX
     ES_REPORT(Z4_MAX);
   #endif
-  #if HAS_CUSTOM_PROBE_PIN
-    print_es_state(READ(Z_MIN_PROBE_PIN) != Z_MIN_PROBE_ENDSTOP_INVERTING, PSTR(STR_Z_PROBE));
+  #if USES_Z_MIN_PROBE_ENDSTOP
+    #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+      print_es_state(printer1->probe_state() == Z_MIN_PROBE_ENDSTOP_INVERTING, PSTR(STR_Z_PROBE));
+    #else
+      print_es_state(READ(Z_MIN_PROBE_PIN) != Z_MIN_PROBE_ENDSTOP_INVERTING, PSTR(STR_Z_PROBE));
+    #endif
   #endif
   #if HAS_FILAMENT_SENSOR
     #if NUM_RUNOUT_SENSORS == 1
-      print_es_state(READ(FIL_RUNOUT_PIN) != FIL_RUNOUT_STATE, PSTR(STR_FILAMENT_RUNOUT_SENSOR));
+      #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+        print_es_state(printer1->filament_state() != FIL_RUNOUT_STATE, PSTR(STR_FILAMENT_RUNOUT_SENSOR));
+      #else
+        print_es_state(READ(FIL_RUNOUT_PIN) != FIL_RUNOUT_STATE, PSTR(STR_FILAMENT_RUNOUT_SENSOR));
+      #endif
     #else
       #define _CASE_RUNOUT(N) case N: pin = FIL_RUNOUT##N##_PIN; break;
       LOOP_S_LE_N(i, 1, NUM_RUNOUT_SENSORS) {
-        pin_t pin;
-        switch (i) {
-          default: continue;
-          REPEAT_S(1, INCREMENT(NUM_RUNOUT_SENSORS), _CASE_RUNOUT)
-        }
-        SERIAL_ECHOPGM(STR_FILAMENT_RUNOUT_SENSOR);
-        if (i > 1) SERIAL_CHAR(' ', '0' + i);
-        print_es_state(extDigitalRead(pin) != FIL_RUNOUT_STATE);
+        #if DISABLED(CAN_FILAMENT2_RUNOUT)
+          pin_t pin;
+          switch (i) {
+            default: continue;
+            REPEAT_S(1, INCREMENT(NUM_RUNOUT_SENSORS), _CASE_RUNOUT)
+          }
+          SERIAL_ECHOPGM(STR_FILAMENT_RUNOUT_SENSOR);
+          if (i > 1) SERIAL_CHAR(' ', '0' + i);
+          print_es_state(extDigitalRead(pin) != FIL_RUNOUT_STATE);
+        #else
+          print_es_state(TEST(CanModules.Endstop, FILAMENT1+i) != FIL_RUNOUT_STATE);
+        #endif
       }
       #undef _CASE_RUNOUT
     #endif
+  #endif
+
   #endif
 
   TERN_(BLTOUCH, bltouch._reset_SW_mode());
@@ -487,20 +572,28 @@ void _O2 Endstops::report_states() {
 #define _ENDSTOP(AXIS, MINMAX) AXIS ##_## MINMAX
 #define _ENDSTOP_PIN(AXIS, MINMAX) AXIS ##_## MINMAX ##_PIN
 #define _ENDSTOP_INVERTING(AXIS, MINMAX) AXIS ##_## MINMAX ##_ENDSTOP_INVERTING
-
 // Check endstops - Could be called from Temperature ISR!
 void Endstops::update() {
-
   #if !ENDSTOP_NOISE_THRESHOLD
     if (!abort_enabled()) return;
   #endif
 
-  #define UPDATE_ENDSTOP_BIT(AXIS, MINMAX) SET_BIT_TO(live_state, _ENDSTOP(AXIS, MINMAX), (READ(_ENDSTOP_PIN(AXIS, MINMAX)) != _ENDSTOP_INVERTING(AXIS, MINMAX)))
+  #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    #define UPDATE_ENDSTOP_BIT(AXIS, MINMAX) SET_BIT_TO(live_state, _ENDSTOP(AXIS, MINMAX), (linear.GetEndstopBit(_ENDSTOP(AXIS, MINMAX)) != _ENDSTOP_INVERTING(AXIS, MINMAX)))
+  #else
+    #define UPDATE_ENDSTOP_BIT(AXIS, MINMAX) SET_BIT_TO(live_state, _ENDSTOP(AXIS, MINMAX), READ(_ENDSTOP_PIN(AXIS, MINMAX)) != _ENDSTOP_INVERTING(AXIS, MINMAX))
+  #endif
   #define COPY_LIVE_STATE(SRC_BIT, DST_BIT) SET_BIT_TO(live_state, DST_BIT, TEST(live_state, SRC_BIT))
 
-  #if ENABLED(G38_PROBE_TARGET) && PIN_EXISTS(Z_MIN_PROBE) && NONE(CORE_IS_XY, CORE_IS_XZ, MARKFORGED_XY)
-    // If G38 command is active check Z_MIN_PROBE for ALL movement
-    if (G38_move) UPDATE_ENDSTOP_BIT(Z, MIN_PROBE);
+  #if ENABLED(G38_PROBE_TARGET) && NONE(CORE_IS_XY, CORE_IS_XZ, MARKFORGED_XY)
+    #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+      if (G38_move) SET_BIT_TO(live_state, Z_MIN_PROBE, (printer1->probe_state() != Z_MIN_PROBE_ENDSTOP_INVERTING));
+    #else
+      #if PIN_EXISTS(Z_MIN_PROBE)
+        // If G38 command is active check Z_MIN_PROBE for ALL movement
+        if (G38_move) UPDATE_ENDSTOP_BIT(Z, MIN_PROBE);
+      #endif
+    #endif
   #endif
 
   // With Dual X, endstops are only checked in the homing direction for the active extruder
@@ -533,10 +626,13 @@ void Endstops::update() {
   /**
    * Check and update endstops
    */
-  #if HAS_X_MIN && !X_SPI_SENSORLESS
-    UPDATE_ENDSTOP_BIT(X, MIN);
+  #if (HAS_X_MIN && !X_SPI_SENSORLESS) || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    #if ENABLED(SW_MACHINE_SIZE) && DISABLED(X_DUAL_ENDSTOPS)
+      if(X_HOME_DIR < 0)
+    #endif
+      UPDATE_ENDSTOP_BIT(X, MIN);
     #if ENABLED(X_DUAL_ENDSTOPS)
-      #if HAS_X2_MIN
+      #if HAS_X2_MIN || defined(CAN_ENDSTOP_X2_MIN)
         UPDATE_ENDSTOP_BIT(X2, MIN);
       #else
         COPY_LIVE_STATE(X_MIN, X2_MIN);
@@ -544,10 +640,13 @@ void Endstops::update() {
     #endif
   #endif
 
-  #if HAS_X_MAX && !X_SPI_SENSORLESS
-    UPDATE_ENDSTOP_BIT(X, MAX);
+  #if (HAS_X_MAX && !X_SPI_SENSORLESS) || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    #if ENABLED(SW_MACHINE_SIZE) && DISABLED(X_DUAL_ENDSTOPS)
+      if(X_HOME_DIR > 0)
+    #endif
+      UPDATE_ENDSTOP_BIT(X, MAX);
     #if ENABLED(X_DUAL_ENDSTOPS)
-      #if HAS_X2_MAX
+      #if HAS_X2_MAX || defined(CAN_ENDSTOP_X2_MAX)
         UPDATE_ENDSTOP_BIT(X2, MAX);
       #else
         COPY_LIVE_STATE(X_MAX, X2_MAX);
@@ -555,10 +654,13 @@ void Endstops::update() {
     #endif
   #endif
 
-  #if HAS_Y_MIN && !Y_SPI_SENSORLESS
-    UPDATE_ENDSTOP_BIT(Y, MIN);
+  #if (HAS_Y_MIN && !Y_SPI_SENSORLESS) || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    #if ENABLED(SW_MACHINE_SIZE) && DISABLED(Y_DUAL_ENDSTOPS)
+      if(Y_HOME_DIR < 0)
+    #endif
+      UPDATE_ENDSTOP_BIT(Y, MIN);
     #if ENABLED(Y_DUAL_ENDSTOPS)
-      #if HAS_Y2_MIN
+      #if HAS_Y2_MIN || defined(CAN_ENDSTOP_Y2_MIN)
         UPDATE_ENDSTOP_BIT(Y2, MIN);
       #else
         COPY_LIVE_STATE(Y_MIN, Y2_MIN);
@@ -566,10 +668,13 @@ void Endstops::update() {
     #endif
   #endif
 
-  #if HAS_Y_MAX && !Y_SPI_SENSORLESS
-    UPDATE_ENDSTOP_BIT(Y, MAX);
+  #if (HAS_Y_MAX && !Y_SPI_SENSORLESS) || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    #if ENABLED(SW_MACHINE_SIZE) && DISABLED(Y_DUAL_ENDSTOPS)
+      if(Y_HOME_DIR > 0)
+    #endif
+      UPDATE_ENDSTOP_BIT(Y, MAX);
     #if ENABLED(Y_DUAL_ENDSTOPS)
-      #if HAS_Y2_MAX
+      #if HAS_Y2_MAX || defined(CAN_ENDSTOP_Y2_MAX)
         UPDATE_ENDSTOP_BIT(Y2, MAX);
       #else
         COPY_LIVE_STATE(Y_MAX, Y2_MAX);
@@ -577,16 +682,19 @@ void Endstops::update() {
     #endif
   #endif
 
-  #if HAS_Z_MIN && !Z_SPI_SENSORLESS
-    UPDATE_ENDSTOP_BIT(Z, MIN);
+  #if (HAS_Z_MIN && !Z_SPI_SENSORLESS) || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    #if DISABLED(Y_DUAL_ENDSTOPS)
+      if(Z_HOME_DIR < 0)
+    #endif
+      UPDATE_ENDSTOP_BIT(Z, MIN);
     #if ENABLED(Z_MULTI_ENDSTOPS)
-      #if HAS_Z2_MIN
+      #if HAS_Z2_MIN || defined(CAN_ENDSTOP_Z2_MIN)
         UPDATE_ENDSTOP_BIT(Z2, MIN);
       #else
         COPY_LIVE_STATE(Z_MIN, Z2_MIN);
       #endif
       #if NUM_Z_STEPPER_DRIVERS >= 3
-        #if HAS_Z3_MIN
+        #if HAS_Z3_MIN || defined(CAN_ENDSTOP_Z3_MIN)
           UPDATE_ENDSTOP_BIT(Z3, MIN);
         #else
           COPY_LIVE_STATE(Z_MIN, Z3_MIN);
@@ -603,21 +711,23 @@ void Endstops::update() {
   #endif
 
   // When closing the gap check the enabled probe
-  #if HAS_CUSTOM_PROBE_PIN
+  #if MOTHERBOARD == BOARD_SNAPMAKER_2_0
+    SET_BIT_TO(live_state, Z_MIN_PROBE, (TEST(printer1->probe_state(), 0) != Z_MIN_PROBE_ENDSTOP_INVERTING));
+  #elif HAS_CUSTOM_PROBE_PIN
     UPDATE_ENDSTOP_BIT(Z, MIN_PROBE);
   #endif
 
-  #if HAS_Z_MAX && !Z_SPI_SENSORLESS
+  #if (HAS_Z_MAX && !Z_SPI_SENSORLESS) || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
     // Check both Z dual endstops
     #if ENABLED(Z_MULTI_ENDSTOPS)
       UPDATE_ENDSTOP_BIT(Z, MAX);
-      #if HAS_Z2_MAX
+      #if HAS_Z2_MAX || defined(CAN_ENDSTOP_Z2_MAX)
         UPDATE_ENDSTOP_BIT(Z2, MAX);
       #else
         COPY_LIVE_STATE(Z_MAX, Z2_MAX);
       #endif
       #if NUM_Z_STEPPER_DRIVERS >= 3
-        #if HAS_Z3_MAX
+        #if HAS_Z3_MAX || defined(CAN_ENDSTOP_Z3_MAX)
           UPDATE_ENDSTOP_BIT(Z3, MAX);
         #else
           COPY_LIVE_STATE(Z_MAX, Z3_MAX);
@@ -632,7 +742,10 @@ void Endstops::update() {
       #endif
     #elif !HAS_CUSTOM_PROBE_PIN || Z_MAX_PIN != Z_MIN_PROBE_PIN
       // If this pin isn't the bed probe it's the Z endstop
-      UPDATE_ENDSTOP_BIT(Z, MAX);
+      #if ENABLED(SW_MACHINE_SIZE)
+        if(Z_HOME_DIR > 0)
+      #endif
+        UPDATE_ENDSTOP_BIT(Z, MAX);
     #endif
   #endif
 
@@ -736,7 +849,7 @@ void Endstops::update() {
     #define PROCESS_ENDSTOP_Z(MINMAX) PROCESS_DUAL_ENDSTOP(Z, MINMAX)
   #endif
 
-  #if ENABLED(G38_PROBE_TARGET) && PIN_EXISTS(Z_MIN_PROBE) && NONE(CORE_IS_XY, CORE_IS_XZ, MARKFORGED_XY)
+  #if ENABLED(G38_PROBE_TARGET) && (PIN_EXISTS(Z_MIN_PROBE) || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)) && NONE(CORE_IS_XY, CORE_IS_XZ, MARKFORGED_XY)
     #if ENABLED(G38_PROBE_AWAY)
       #define _G38_OPEN_STATE (G38_move >= 4)
     #else
@@ -1046,3 +1159,4 @@ void Endstops::update() {
   }
 
 #endif // PINS_DEBUGGING
+

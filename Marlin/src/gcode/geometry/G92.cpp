@@ -23,6 +23,7 @@
 #include "../gcode.h"
 #include "../../module/motion.h"
 #include "../../module/stepper.h"
+#include "../../module/settings.h"
 
 #if ENABLED(I2C_POSITION_ENCODERS)
   #include "../../feature/encoder_i2c.h"
@@ -33,7 +34,7 @@
  */
 void GcodeSuite::G92() {
 
-  bool sync_E = false, sync_XYZ = false;
+  bool sync_E = false, sync_XYZ = false, only_E = true;
 
   #if ENABLED(USE_GCODE_SUBCODES)
     const uint8_t subcode_G92 = parser.subcode;
@@ -80,6 +81,7 @@ void GcodeSuite::G92() {
                 current_position.e = v;       // When using coordinate spaces, only E is set directly
               }
               else {
+                only_E = false;
                 position_shift[i] += d;       // Other axes simply offset the coordinate space
                 update_workspace_offset((AxisEnum)i);
               }
@@ -91,9 +93,15 @@ void GcodeSuite::G92() {
   }
 
   #if ENABLED(CNC_COORDINATE_SYSTEMS)
-    // Apply workspace offset to the active coordinate system
-    if (WITHIN(active_coordinate_system, 0, MAX_COORDINATE_SYSTEMS - 1))
-      coordinate_system[active_coordinate_system] = position_shift;
+    // will not save coordinate when set only E
+    // to reduce rw times to flash
+    if (!only_E) {
+      // Apply workspace offset to the active coordinate system
+      if (WITHIN(active_coordinate_system, 0, MAX_COORDINATE_SYSTEMS - 1)) {
+        coordinate_system[active_coordinate_system] = position_shift;
+        settings.save();
+      }
+    }
   #endif
 
   if    (sync_XYZ) sync_plan_position();

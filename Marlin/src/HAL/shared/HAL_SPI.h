@@ -29,6 +29,9 @@
 #include "Marduino.h"
 #include <stdint.h>
 
+#include "Configuration.h"
+#if (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
+
 /**
  * SPI speed where 0 <= index <= 6
  *
@@ -91,3 +94,5 @@ void spiSend(uint32_t chan, const uint8_t* buf, size_t n);
 
 // Read single byte from specified SPI channel
 uint8_t spiRec(uint32_t chan);
+
+#endif  // #if (MOTHERBOARD !=BOARD_SNAPMAKER_2_0)

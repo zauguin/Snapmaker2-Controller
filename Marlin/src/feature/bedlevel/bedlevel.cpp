@@ -42,6 +42,8 @@
 #define DEBUG_OUT ENABLED(DEBUG_LEVELING_FEATURE)
 #include "../../core/debug_out.h"
 
+#include "../../../../snapmaker/src/snapmaker.h"
+
 #if ENABLED(EXTENSIBLE_UI)
   #include "../../lcd/extui/ui_api.h"
 #endif
@@ -62,6 +64,8 @@ bool leveling_is_valid() {
 void set_bed_leveling_enabled(const bool enable/*=true*/) {
 
   const bool can_change = TERN1(AUTO_BED_LEVELING_BILINEAR, !enable || leveling_is_valid());
+
+  LOG_I("leveling %s\n", enable ? "ON": "OFF");
 
   if (can_change && enable != planner.leveling_active) {
 
@@ -129,16 +133,30 @@ void reset_bed_level() {
     #if ENABLED(MESH_BED_LEVELING)
       mbl.reset();
     #elif ENABLED(AUTO_BED_LEVELING_BILINEAR)
-      bilinear_start.reset();
-      bilinear_grid_spacing.reset();
+      bilinear_start = xy_pos_t{PROBING_MARGIN_LEFT, PROBING_MARGIN_FRONT};
+      bilinear_grid_spacing = xy_pos_t{(X_MAX_POS - PROBING_MARGIN_LEFT) / GRID_MAX_POINTS_X,
+                                       (Y_MAX_POS - PROBING_MARGIN_FRONT) / GRID_MAX_POINTS_Y};
       GRID_LOOP(x, y) {
-        z_values[x][y] = NAN;
+        z_values[x][y] = DEFAUT_LEVELING_HEIGHT;
         TERN_(EXTENSIBLE_UI, ExtUI::onMeshUpdate(x, y, 0));
       }
     #elif ABL_PLANAR
       planner.bed_level_matrix.set_to_identity();
     #endif
   #endif
+}
+/**
+ * use this to reset data when we update firmware.
+ */
+void reset_bed_level_if_upgraded() {
+  for (uint8_t x = 0; x < GRID_MAX_POINTS_X; x++)
+    for (uint8_t y = 0; y < GRID_MAX_POINTS_Y; y++) {
+      if (z_values[x][y] > 0.1) {
+        return;
+      }
+    }
+  reset_bed_level();
+  bed_level_virt_interpolate();
 }
 
 #if EITHER(AUTO_BED_LEVELING_BILINEAR, MESH_BED_LEVELING)

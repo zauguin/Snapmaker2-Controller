@@ -1,0 +1,83 @@
+/*
+ * Snapmaker2-Controller Firmware
+ * Copyright (C) 2019-2020 Snapmaker [https://github.com/Snapmaker]
+ *
+ * This file is part of Snapmaker2-Controller
+ * (see https://github.com/Snapmaker/Snapmaker2-Controller)
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include "../common/debug.h"
+#include "../common/config.h"
+
+#include "../service/system.h"
+
+#include "src/gcode/gcode.h"
+#include "src/gcode/queue.h"
+#include "src/core/macros.h"
+
+void GcodeSuite::M2000() {
+  uint8_t l;
+  uint8_t s = (uint8_t)parser.byteval('S', (uint8_t)0);
+
+  switch (s) {
+  case 0:
+    // show current snapmaker info
+    SNAP_DEBUG_SHOW_INFO();
+    LOG_I("position_shift:\n");
+    LOG_I("X: %f, Y:%f, Z:%f\n", position_shift[X_AXIS], position_shift[Y_AXIS], position_shift[Z_AXIS]);
+    LOG_I("home_offset:\n");
+    LOG_I("X: %f, Y:%f, Z:%f\n", home_offset[X_AXIS], home_offset[Y_AXIS], home_offset[Z_AXIS]);
+    LOG_I("workspace_offset:\n");
+    LOG_I("X: %f, Y:%f, Z:%f\n", workspace_offset[X_AXIS], workspace_offset[Y_AXIS], workspace_offset[Z_AXIS]);
+    LOG_I("cur position:\n");
+    LOG_I("X: %f, Y:%f, Z:%f\n", current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS]);
+    break;
+
+  case 1:
+    // set PC log level
+    l = (uint8_t)parser.byteval('L', (uint8_t)10);
+    if (!WITHIN(l, 0, (int)SNAP_DEBUG_LEVEL_MAX)) {
+      LOG_E("L out of range (0-%d)\n", (int)SNAP_DEBUG_LEVEL_MAX);
+      return;
+    }
+    SNAP_DEBUG_SET_LEVEL(0, (SnapDebugLevel)l);
+    break;
+
+  case 2:
+    // set SC log level
+    l = (uint8_t)parser.byteval('L', (uint8_t)10);
+    if (!WITHIN(l, 0, (int)SNAP_DEBUG_LEVEL_MAX)) {
+      LOG_E("L out of range (0-%d)\n", (int)SNAP_DEBUG_LEVEL_MAX);
+      return;
+    }
+    SNAP_DEBUG_SET_LEVEL(1, (SnapDebugLevel)l);
+    break;
+
+  case 3:
+    SNAP_DEBUG_SHOW_EXCEPTION();
+    break;
+
+  case 4:
+    l = (uint8_t)parser.byteval('L', (uint8_t)0);
+    if (!WITHIN(l, 1, 32)) {
+      LOG_E("L is out of range (1-32)\n");
+      return;
+    }
+    systemservice.ClearExceptionByFaultFlag(1<<(l-1));
+    break;
+  }
+
+}

@@ -61,6 +61,10 @@ GcodeSuite gcode;
   #include "../feature/password/password.h"
 #endif
 
+#if MOTHERBOARD == BOARD_SNAPMAKER_2_0
+  #include "../../../snapmaker/src/module/module_base.h"
+#endif
+
 #include "../MarlinCore.h" // for idle()
 
 // Inactivity shutdown
@@ -239,10 +243,7 @@ void GcodeSuite::dwell(millis_t time) {
   extern void M100_dump_routine(PGM_P const title, const char * const start, const char * const end);
 #endif
 
-/**
- * Process the parsed command and dispatch it to its handler
- */
-void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
+void GcodeSuite::execute_command(void) {
   KEEPALIVE_STATE(IN_HANDLER);
 
  /**
@@ -381,6 +382,7 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
       #if ENABLED(DEBUG_GCODE_PARSER)
         case 800: parser.debug(); break;                          // G800: GCode Parser Test for G
       #endif
+      case 1029: G1029(); break;
 
       default: parser.unknown_command_warning(); break;
     }
@@ -393,7 +395,7 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
         case 1: M0_M1(); break;                                   // M1: Conditional stop - Wait for user button press on LCD
       #endif
 
-      #if HAS_CUTTER
+      #if HAS_CUTTER || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
         case 3: M3_M4(false); break;                              // M3: Turn ON Laser | Spindle (clockwise), set Power | Speed
         case 4: M3_M4(true ); break;                              // M4: Turn ON Laser | Spindle (counter-clockwise), set Power | Speed
         case 5: M5(); break;                                      // M5: Turn OFF Laser | Spindle
@@ -473,18 +475,19 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
       #if ENABLED(M100_FREE_MEMORY_WATCHER)
         case 100: M100(); break;                                  // M100: Free Memory Report
       #endif
+      case 101: M101(); break;                                    // M101: RTOS Task Free Memory Report
 
       #if EXTRUDERS
         case 104: M104(); break;                                  // M104: Set hot end temperature
         case 109: M109(); break;                                  // M109: Wait for hotend temperature to reach target
       #endif
 
-      case 105: M105(); return;                                   // M105: Report Temperatures (and say "ok")
+      case 105: M105(); break;                                    // M105: Report Temperatures (and say "ok")
 
-      #if HAS_FAN
+      //#if HAS_FAN
         case 106: M106(); break;                                  // M106: Fan On
         case 107: M107(); break;                                  // M107: Fan Off
-      #endif
+      //#endif
 
       case 110: M110(); break;                                    // M110: Set Current Line Number
       case 111: M111(); break;                                    // M111: Set debug level
@@ -680,11 +683,11 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
       #endif
 
       #if ENABLED(MORGAN_SCARA)
-        case 360: if (M360()) return; break;                      // M360: SCARA Theta pos1
-        case 361: if (M361()) return; break;                      // M361: SCARA Theta pos2
-        case 362: if (M362()) return; break;                      // M362: SCARA Psi pos1
-        case 363: if (M363()) return; break;                      // M363: SCARA Psi pos2
-        case 364: if (M364()) return; break;                      // M364: SCARA Psi pos3 (90 deg to Theta)
+        case 360: if (M360()) if(!queue.ok_to_HMI()) return; break;                      // M360: SCARA Theta pos1
+        case 361: if (M361()) if(!queue.ok_to_HMI()) return; break;                      // M361: SCARA Theta pos2
+        case 362: if (M362()) if(!queue.ok_to_HMI()) return; break;                      // M362: SCARA Psi pos1
+        case 363: if (M363()) if(!queue.ok_to_HMI()) return; break;                      // M363: SCARA Psi pos2
+        case 364: if (M364()) if(!queue.ok_to_HMI()) return; break;                      // M364: SCARA Psi pos3 (90 deg to Theta)
       #endif
 
       #if EITHER(EXT_SOLENOID, MANUAL_SOLENOID_CONTROL)
@@ -921,6 +924,26 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
       #if ENABLED(MAX7219_GCODE)
         case 7219: M7219(); break;                                // M7219: Set LEDs, columns, and rows
       #endif
+      case 1005: M1005(); break;
+      case 1006: M1006(); break;
+      case 1007: M1007(); break;
+
+      case 1010: M1010(); break;                                  // M1010 control/query chamber status, compatible with Snapmaker1
+
+      case 1026:
+        enable_wait = !enable_wait;
+        if (enable_wait) {
+          SERIAL_ECHOLN("ENABLE Wait heartbeat");
+        } else {
+          SERIAL_ECHOLN("DISABLE Wait heartbeat");
+        }
+        break;
+
+      case 1028: M1028(); break;
+
+      case 1999: M1999(); break;
+
+      case 2000: M2000(); break;
 
       default: parser.unknown_command_warning(); break;
     }
@@ -938,8 +961,26 @@ void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
       #endif
       parser.unknown_command_warning();
   }
+}
 
-  if (!no_ok) queue.ok_to_send();
+/**
+ * Process the parsed command and dispatch it to its handler
+ */
+void GcodeSuite::process_parsed_command(const bool no_ok/*=false*/) {
+
+  if (ModuleBase::lock_marlin_uart()) {
+    // only handle M1120
+    if (parser.command_letter == 'M' && parser.codenum == 1010) {
+      execute_command();
+      queue.ok_to_send();
+    }
+
+    return;
+  }
+
+  execute_command();
+
+  if (!no_ok && !ModuleBase::lock_marlin_uart()) queue.ok_to_send();
 }
 
 /**

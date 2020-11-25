@@ -28,6 +28,9 @@
 
 #include "../inc/MarlinConfig.h"
 
+extern bool enable_wait;
+extern uint32_t CommandLine[BUFSIZE];
+
 class GCodeQueue {
 public:
   /**
@@ -142,6 +145,13 @@ public:
   static void ok_to_send();
 
   /**
+   * Check if the command came from HMI
+   */
+  static bool ok_to_HMI();
+
+  static uint32_t command_line() { return CommandLine[index_r]; }
+
+  /**
    * Clear the serial line and request a resend of
    * the next expected line number.
    */
@@ -153,9 +163,7 @@ private:
 
   static void get_serial_commands();
 
-  #if ENABLED(SDSUPPORT)
-    static void get_sdcard_commands();
-  #endif
+  static void get_hmi_commands();
 
   static void _commit_command(bool say_ok
     #if HAS_MULTI_SERIAL
@@ -184,5 +192,8 @@ private:
   static void gcode_line_error(PGM_P const err, const int8_t pn);
 
 };
+
+void Screen_enqueue_and_echo_commands(char* pgcode, uint32_t Lines, uint8_t Opcode);
+void ack_gcode_event(uint8_t event_id, uint32_t line);
 
 extern GCodeQueue queue;

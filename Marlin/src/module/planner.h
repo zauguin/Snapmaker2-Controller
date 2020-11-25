@@ -230,6 +230,8 @@ typedef struct block_t {
     block_laser_t laser;
   #endif
 
+  uint32_t filePos;                       // position of gcode of this block in the file
+
 } block_t;
 
 #if ANY(LIN_ADVANCE, SCARA_FEEDRATE_SCALING, GRADIENT_MIX, LCD_SHOW_E_TOTAL)
@@ -646,7 +648,13 @@ class Planner {
     FORCE_INLINE static block_t* get_next_free_block(uint8_t &next_buffer_head, const uint8_t count=1) {
 
       // Wait until there are enough slots free
-      while (moves_free() < count) { idle(); }
+      while (moves_free() < count) 
+      {
+        //if request quick stop
+        if(cleaning_buffer_counter) 
+          return NULL;
+        idle(); 
+      }
 
       // Return the first available block
       next_buffer_head = next_block_index(block_buffer_head);
@@ -830,7 +838,7 @@ class Planner {
     static void quick_stop();
 
     // Called when an endstop is triggered. Causes the machine to stop inmediately
-    static void endstop_triggered(const AxisEnum axis);
+    static void endstop_triggered(const AxisEnum axis) AT_SNAP_SECTION;
 
     // Triggered position of an axis in mm (not core-savvy)
     static float triggered_position_mm(const AxisEnum axis);
@@ -847,10 +855,10 @@ class Planner {
       if (cleaning_buffer_counter) --cleaning_buffer_counter;
     }
 
-    /**
-     * Does the buffer have any blocks queued?
-     */
-    FORCE_INLINE static bool has_blocks_queued() { return (block_buffer_head != block_buffer_tail); }
+/**
+ * Does the buffer have any blocks queued?
+ */
+FORCE_INLINE static bool has_blocks_queued() { return (block_buffer_head != block_buffer_tail); }
 
     /**
      * Get the current block for processing
@@ -860,7 +868,7 @@ class Planner {
      *
      * WARNING: Called from Stepper ISR context!
      */
-    static block_t* get_current_block();
+    static block_t* get_current_block() AT_SNAP_SECTION;
 
     /**
      * "Release" the current block so its slot can be reused.
@@ -897,8 +905,8 @@ class Planner {
     /**
      * Get the index of the next / previous block in the ring buffer
      */
-    static constexpr uint8_t next_block_index(const uint8_t block_index) { return BLOCK_MOD(block_index + 1); }
-    static constexpr uint8_t prev_block_index(const uint8_t block_index) { return BLOCK_MOD(block_index - 1); }
+    static constexpr uint8_t next_block_index(const uint8_t block_index)  AT_SNAP_SECTION { return BLOCK_MOD(block_index + 1); }
+    static constexpr uint8_t prev_block_index(const uint8_t block_index)  AT_SNAP_SECTION { return BLOCK_MOD(block_index - 1); }
 
     /**
      * Calculate the distance (not time) it takes to accelerate

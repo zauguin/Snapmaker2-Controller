@@ -32,8 +32,10 @@
 
 FilamentMonitor runout;
 
-bool FilamentMonitorBase::enabled = true,
+bool FilamentMonitorBase::enabled = false,
      FilamentMonitorBase::filament_ran_out;  // = false
+uint8_t FilamentMonitorBase::statefromcan = 0;
+millis_t FilamentMonitorBase::ranout_timer = 0;
 
 #if ENABLED(HOST_ACTION_COMMANDS)
   bool FilamentMonitorBase::host_handling; // = false
@@ -69,71 +71,74 @@ bool FilamentMonitorBase::enabled = true,
 #endif
 
 void event_filament_runout() {
+  #if 0
+    if (TERN0(ADVANCED_PAUSE_FEATURE, did_pause_print)) return;  // Action already in progress. Purge triggered repeated runout.
 
-  if (TERN0(ADVANCED_PAUSE_FEATURE, did_pause_print)) return;  // Action already in progress. Purge triggered repeated runout.
-
-  #if ENABLED(TOOLCHANGE_MIGRATION_FEATURE)
-    if (migration.in_progress) {
-      #if ENABLED(DEBUG_TOOLCHANGE_MIGRATION_FEATURE)
-        SERIAL_ECHOLN("Migration Already In Progress");
-      #endif
-      return;  // Action already in progress. Purge triggered repeated runout.
-    }
-    if (migration.automode) {
-      #if ENABLED(DEBUG_TOOLCHANGE_MIGRATION_FEATURE)
-        SERIAL_ECHOLN("Migration Starting");
-      #endif
-      if (extruder_migration()) return;
-    }
-  #endif
-
-  TERN_(EXTENSIBLE_UI, ExtUI::onFilamentRunout(ExtUI::getActiveTool()));
-
-  #if EITHER(HOST_PROMPT_SUPPORT, HOST_ACTION_COMMANDS)
-    const char tool = '0'
-      #if NUM_RUNOUT_SENSORS > 1
-        + active_extruder
-      #endif
-    ;
-  #endif
-
-  //action:out_of_filament
-  #if ENABLED(HOST_PROMPT_SUPPORT)
-    host_action_prompt_begin(PROMPT_FILAMENT_RUNOUT, PSTR("FilamentRunout T"), tool);
-    host_action_prompt_show();
-  #endif
-
-  const bool run_runout_script = !runout.host_handling;
-
-  #if ENABLED(HOST_ACTION_COMMANDS)
-    if (run_runout_script
-      && ( strstr(FILAMENT_RUNOUT_SCRIPT, "M600")
-        || strstr(FILAMENT_RUNOUT_SCRIPT, "M125")
-        #if ENABLED(ADVANCED_PAUSE_FEATURE)
-          || strstr(FILAMENT_RUNOUT_SCRIPT, "M25")
+    #if ENABLED(TOOLCHANGE_MIGRATION_FEATURE)
+      if (migration.in_progress) {
+        #if ENABLED(DEBUG_TOOLCHANGE_MIGRATION_FEATURE)
+          SERIAL_ECHOLN("Migration Already In Progress");
         #endif
-      )
-    ) {
-      host_action_paused(false);
-    }
-    else {
-      // Legacy Repetier command for use until newer version supports standard dialog
-      // To be removed later when pause command also triggers dialog
-      #ifdef ACTION_ON_FILAMENT_RUNOUT
-        host_action(PSTR(ACTION_ON_FILAMENT_RUNOUT " T"), false);
-        SERIAL_CHAR(tool);
-        SERIAL_EOL();
-      #endif
+        return;  // Action already in progress. Purge triggered repeated runout.
+      }
+      if (migration.automode) {
+        #if ENABLED(DEBUG_TOOLCHANGE_MIGRATION_FEATURE)
+          SERIAL_ECHOLN("Migration Starting");
+        #endif
+        if (extruder_migration()) return;
+      }
+    #endif
 
-      host_action_pause(false);
-    }
-    SERIAL_ECHOPGM(" " ACTION_REASON_ON_FILAMENT_RUNOUT " ");
-    SERIAL_CHAR(tool);
-    SERIAL_EOL();
-  #endif // HOST_ACTION_COMMANDS
+    TERN_(EXTENSIBLE_UI, ExtUI::onFilamentRunout(ExtUI::getActiveTool()));
 
-  if (run_runout_script)
-    queue.inject_P(PSTR(FILAMENT_RUNOUT_SCRIPT));
+    #if EITHER(HOST_PROMPT_SUPPORT, HOST_ACTION_COMMANDS)
+      const char tool = '0'
+        #if NUM_RUNOUT_SENSORS > 1
+          + active_extruder
+        #endif
+      ;
+    #endif
+
+    //action:out_of_filament
+    #if ENABLED(HOST_PROMPT_SUPPORT)
+      host_action_prompt_begin(PROMPT_FILAMENT_RUNOUT, PSTR("FilamentRunout T"), tool);
+      host_action_prompt_show();
+    #endif
+
+    const bool run_runout_script = !runout.host_handling;
+
+    #if ENABLED(HOST_ACTION_COMMANDS)
+      if (run_runout_script
+        && ( strstr(FILAMENT_RUNOUT_SCRIPT, "M600")
+          || strstr(FILAMENT_RUNOUT_SCRIPT, "M125")
+          #if ENABLED(ADVANCED_PAUSE_FEATURE)
+            || strstr(FILAMENT_RUNOUT_SCRIPT, "M25")
+          #endif
+        )
+      ) {
+        host_action_paused(false);
+      }
+      else {
+        // Legacy Repetier command for use until newer version supports standard dialog
+        // To be removed later when pause command also triggers dialog
+        #ifdef ACTION_ON_FILAMENT_RUNOUT
+          host_action(PSTR(ACTION_ON_FILAMENT_RUNOUT " T"), false);
+          SERIAL_CHAR(tool);
+          SERIAL_EOL();
+        #endif
+
+        host_action_pause(false);
+      }
+      SERIAL_ECHOPGM(" " ACTION_REASON_ON_FILAMENT_RUNOUT " ");
+      SERIAL_CHAR(tool);
+      SERIAL_EOL();
+    #endif // HOST_ACTION_COMMANDS
+
+    if (run_runout_script)
+      queue.inject_P(PSTR(FILAMENT_RUNOUT_SCRIPT));
+  #else
+    systemservice.PauseTrigger(TRIGGER_SOURCE_RUNOUT);
+  #endif
 }
 
 #endif // HAS_FILAMENT_SENSOR

@@ -69,7 +69,7 @@
 #endif
 
 // Clock speed factors
-#if !defined(CYCLES_PER_MICROSECOND) && !defined(__STM32F1__)
+#if !defined(CYCLES_PER_MICROSECOND) && !(defined(__GD32F1__) || defined(__STM32F1__))
   #define CYCLES_PER_MICROSECOND (F_CPU / 1000000UL) // 16 or 20 on AVR
 #endif
 
@@ -514,3 +514,39 @@
 #define MAP0(f, x, peek, ...) f(x) MAP_NEXT (peek, MAP1) (f, peek, __VA_ARGS__)
 #define MAP1(f, x, peek, ...) f(x) MAP_NEXT (peek, MAP0) (f, peek, __VA_ARGS__)
 #define MAP(f, ...) EVAL512 (MAP1 (f, __VA_ARGS__, (), 0))
+
+//Machine type defines,ExecuterManager use this
+#define MACHINE_TYPE_UNDEFINE 0  
+#define MACHINE_TYPE_3DPRINT  1  
+#define MACHINE_TYPE_CNC    2  
+#define MACHINE_TYPE_LASER  3
+
+//Machine size define
+#define MACHINE_SIZE_UNKNOW 0
+#define MACHINE_SIZE_S      1
+#define MACHINE_SIZE_M      2
+#define MACHINE_SIZE_L      3
+
+//Machine Status defines,StatuaControl use this
+#define STAT_IDLE           0
+#define STAT_RUNNING        1
+#define STAT_PAUSE          2
+#define STAT_RUNNING_ONLINE 3
+#define STAT_PAUSE_ONLINE   4
+
+//FLASH定义占用空间大小
+#define FLASH_SIZE      (1024*1024)
+#define BOOT_CODE_SIZE	(32*1024)
+#define BOOT_PARA_SIZE	(4*1024)
+#define MARLIN_POWERPANIC_SIZE  (6*1024)
+#define MARLIN_EEPROM_SIZE (4*1024)
+#define UPDATE_CONTENT_INFO_SIZE (2*1024)
+#define MARLIN_CODE_SIZE	((FLASH_SIZE - BOOT_CODE_SIZE - BOOT_PARA_SIZE - MARLIN_EEPROM_SIZE - MARLIN_POWERPANIC_SIZE - UPDATE_CONTENT_INFO_SIZE) / 2)
+
+//起始地址必须为2048倍数
+#define FLASH_BOOT_PARA	          (0x8000000 + BOOT_CODE_SIZE)
+#define FLASH_MARLIN_POWERPANIC   (FLASH_BOOT_PARA + BOOT_PARA_SIZE)
+#define FLASH_MARLIN_EEPROM       (FLASH_MARLIN_POWERPANIC + MARLIN_POWERPANIC_SIZE)
+#define FLASH_MARLIN	            (FLASH_MARLIN_EEPROM + MARLIN_EEPROM_SIZE)
+#define FLASH_UPDATE_CONTENT_INFO (FLASH_MARLIN + MARLIN_CODE_SIZE) 
+#define FLASH_UPDATE_CONTENT      (FLASH_UPDATE_CONTENT_INFO + UPDATE_CONTENT_INFO_SIZE)

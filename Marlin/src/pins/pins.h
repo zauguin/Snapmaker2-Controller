@@ -572,6 +572,9 @@
 #elif MB(FLY_MINI)
   #include "stm32f1/pins_FLY_MINI.h"            // STM32F1                                env:FLY_MINI
 
+#elif MB(SNAPMAKER_2_0)
+  #include "gd32f1/pins_SNAPMAKER_2_0.h"
+
 //
 // ARM Cortex-M4F
 //
@@ -1128,59 +1131,76 @@
 //
 // Assign endstop pins for boards with only 3 connectors
 //
-#ifdef X_STOP_PIN
-  #if X_HOME_DIR < 0
+#if DISABLED(SW_MACHINE_SIZE)
+  #ifdef X_STOP_PIN
+    #if X_HOME_DIR < 0
+      #define X_MIN_PIN X_STOP_PIN
+      #ifndef X_MAX_PIN
+        #define X_MAX_PIN -1
+      #endif
+    #else
+      #define X_MAX_PIN X_STOP_PIN
+      #ifndef X_MIN_PIN
+        #define X_MIN_PIN -1
+      #endif
+    #endif
+  #elif X_HOME_DIR < 0
+    #define X_STOP_PIN X_MIN_PIN
+  #else
+    #define X_STOP_PIN X_MAX_PIN
+  #endif
+
+  #ifdef Y_STOP_PIN
+    #if Y_HOME_DIR < 0
+      #define Y_MIN_PIN Y_STOP_PIN
+      #ifndef Y_MAX_PIN
+        #define Y_MAX_PIN -1
+      #endif
+    #else
+      #define Y_MAX_PIN Y_STOP_PIN
+      #ifndef Y_MIN_PIN
+        #define Y_MIN_PIN -1
+      #endif
+    #endif
+  #elif Y_HOME_DIR < 0
+    #define Y_STOP_PIN Y_MIN_PIN
+  #else
+    #define Y_STOP_PIN Y_MAX_PIN
+  #endif
+
+  #ifdef Z_STOP_PIN
+    #if Z_HOME_DIR < 0
+      #define Z_MIN_PIN Z_STOP_PIN
+      #ifndef Z_MAX_PIN
+        #define Z_MAX_PIN -1
+      #endif
+    #else
+      #define Z_MAX_PIN Z_STOP_PIN
+      #ifndef Z_MIN_PIN
+        #define Z_MIN_PIN -1
+      #endif
+    #endif
+  #elif Z_HOME_DIR < 0
+    #define Z_STOP_PIN Z_MIN_PIN
+  #else
+    #define Z_STOP_PIN Z_MAX_PIN
+  #endif
+#else
+  #ifdef X_STOP_PIN
     #define X_MIN_PIN X_STOP_PIN
-    #ifndef X_MAX_PIN
-      #define X_MAX_PIN -1
-    #endif
-  #else
     #define X_MAX_PIN X_STOP_PIN
-    #ifndef X_MIN_PIN
-      #define X_MIN_PIN -1
-    #endif
   #endif
-#elif X_HOME_DIR < 0
-  #define X_STOP_PIN X_MIN_PIN
-#else
-  #define X_STOP_PIN X_MAX_PIN
-#endif
 
-#ifdef Y_STOP_PIN
-  #if Y_HOME_DIR < 0
+  #ifdef Y_STOP_PIN
     #define Y_MIN_PIN Y_STOP_PIN
-    #ifndef Y_MAX_PIN
-      #define Y_MAX_PIN -1
-    #endif
-  #else
     #define Y_MAX_PIN Y_STOP_PIN
-    #ifndef Y_MIN_PIN
-      #define Y_MIN_PIN -1
-    #endif
   #endif
-#elif Y_HOME_DIR < 0
-  #define Y_STOP_PIN Y_MIN_PIN
-#else
-  #define Y_STOP_PIN Y_MAX_PIN
-#endif
 
-#ifdef Z_STOP_PIN
-  #if Z_HOME_DIR < 0
+  #ifdef Z_STOP_PIN
     #define Z_MIN_PIN Z_STOP_PIN
-    #ifndef Z_MAX_PIN
-      #define Z_MAX_PIN -1
-    #endif
-  #else
     #define Z_MAX_PIN Z_STOP_PIN
-    #ifndef Z_MIN_PIN
-      #define Z_MIN_PIN -1
-    #endif
   #endif
-#elif Z_HOME_DIR < 0
-  #define Z_STOP_PIN Z_MIN_PIN
-#else
-  #define Z_STOP_PIN Z_MAX_PIN
-#endif
+#endif // DISABLED(SW_MACHINE_SIZE)
 
 //
 // Disable unused endstop / probe pins

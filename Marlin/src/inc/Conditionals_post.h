@@ -667,7 +667,7 @@
 /**
  * X_DUAL_ENDSTOPS endstop reassignment
  */
-#if ENABLED(X_DUAL_ENDSTOPS)
+#if ENABLED(X_DUAL_ENDSTOPS) && DISABLED(SW_MACHINE_SIZE)
   #if X_HOME_DIR > 0
     #ifndef X2_MAX_ENDSTOP_INVERTING
       #if X2_USE_ENDSTOP == _XMIN_
@@ -790,7 +790,7 @@
 /**
  * Y_DUAL_ENDSTOPS endstop reassignment
  */
-#if ENABLED(Y_DUAL_ENDSTOPS)
+#if ENABLED(Y_DUAL_ENDSTOPS) && DISABLED(SW_MACHINE_SIZE)
   #if Y_HOME_DIR > 0
     #ifndef Y2_MAX_ENDSTOP_INVERTING
       #if Y2_USE_ENDSTOP == _XMIN_
@@ -913,7 +913,7 @@
 /**
  * Z_MULTI_ENDSTOPS endstop reassignment
  */
-#if ENABLED(Z_MULTI_ENDSTOPS)
+#if ENABLED(Z_MULTI_ENDSTOPS) && DISABLED(SW_MACHINE_SIZE)
 
   #if Z_HOME_DIR > 0
     #ifndef Z2_MAX_ENDSTOP_INVERTING
@@ -1033,7 +1033,7 @@
     #endif
   #endif
 
-  #if NUM_Z_STEPPER_DRIVERS >= 3
+  #if NUM_Z_STEPPER_DRIVERS >= 3 && DISABLED(SW_MACHINE_SIZE)
     #if Z_HOME_DIR > 0
       #ifndef Z3_MAX_ENDSTOP_INVERTING
         #if Z3_USE_ENDSTOP == _XMIN_
@@ -2400,6 +2400,15 @@
   #ifndef DELTA_DIAGONAL_ROD_TRIM_TOWER
     #define DELTA_DIAGONAL_ROD_TRIM_TOWER { 0, 0, 0 }
   #endif
+#endif
+
+#if ENABLED(SW_MACHINE_SIZE) && IS_CARTESIAN
+  extern float X_MAX_POS;
+  extern float Y_MAX_POS;
+  extern float Z_MAX_POS;
+  extern float X_MIN_POS;
+  extern float Y_MIN_POS;
+  extern float Z_MIN_POS;
 #endif
 
 #if ENABLED(SEGMENT_LEVELED_MOVES) && !defined(LEVELED_SEGMENT_LENGTH)

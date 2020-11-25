@@ -72,9 +72,13 @@ public:
        *          nozzle must be be able to reach +10,-10.
        */
       static inline bool can_reach(const float &rx, const float &ry) {
+        /*
         return position_is_reachable(rx - offset_xy.x, ry - offset_xy.y)
             && WITHIN(rx, min_x() - fslop, max_x() + fslop)
             && WITHIN(ry, min_y() - fslop, max_y() + fslop);
+        */
+        return  WITHIN(rx, X_MIN_POS + home_offset[X_AXIS], X_MAX_POS + home_offset[X_AXIS])
+            && WITHIN(ry, Y_MIN_POS + home_offset[Y_AXIS], Y_MAX_POS + home_offset[Y_AXIS]);
       }
 
     #endif

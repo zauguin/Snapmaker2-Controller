@@ -46,7 +46,11 @@ void GcodeSuite::M412() {
     #endif
     const bool seenR = parser.seen('R'), seenS = parser.seen('S');
     if (seenR || seenS) runout.reset();
-    if (seenS) runout.enabled = parser.value_bool();
+    // if user disable runout checking, clear execption
+    if (seenS) {
+      if (!(runout.enabled = parser.value_bool()))
+        systemservice.ClearExceptionByFaultFlag(FAULT_FLAG_FILAMENT);
+    }
     #if HAS_FILAMENT_RUNOUT_DISTANCE
       if (parser.seen('D')) runout.set_runout_distance(parser.value_linear_units());
     #endif

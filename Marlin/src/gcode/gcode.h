@@ -338,7 +338,7 @@ public:
     static WorkspacePlane workspace_plane;
   #endif
 
-  #define MAX_COORDINATE_SYSTEMS 9
+  #define MAX_COORDINATE_SYSTEMS 2
   #if ENABLED(CNC_COORDINATE_SYSTEMS)
     static int8_t active_coordinate_system;
     static xyz_pos_t coordinate_system[MAX_COORDINATE_SYSTEMS];
@@ -358,6 +358,7 @@ public:
   static int8_t get_target_e_stepper_from_command();
   static void get_destination_from_command();
 
+  static void execute_command(void);
   static void process_parsed_command(const bool no_ok=false);
   static void process_next_command();
 
@@ -497,12 +498,13 @@ private:
   TERN_(GCODE_MOTION_MODES, static void G80());
 
   static void G92();
+  static void G1029();
 
   TERN_(CALIBRATION_GCODE, static void G425());
 
   TERN_(HAS_RESUME_CONTINUE, static void M0_M1());
 
-  #if HAS_CUTTER
+  #if HAS_CUTTER || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
     static void M3_M4(const bool is_M4);
     static void M5();
   #endif
@@ -572,13 +574,14 @@ private:
     static void M104();
     static void M109();
   #endif
+  static void M101();
 
   static void M105();
 
-  #if HAS_FAN
+  /* #if HAS_FAN */
     static void M106();
     static void M107();
-  #endif
+  /* #endif */
 
   #if DISABLED(EMERGENCY_PARSER)
     static void M108();
@@ -878,6 +881,18 @@ private:
     static void M413();
     static void M1000();
   #endif
+
+  static void M1005();
+  static void M1006();
+  static void M1007();
+
+  static void M1028();
+
+  static void M1010();
+
+  static void M1999();
+
+  static void M2000();
 
   TERN_(SDSUPPORT, static void M1001());
 

@@ -45,7 +45,6 @@
   #include "../../feature/bltouch.h"
 #endif
 
-#include "../../lcd/ultralcd.h"
 #if ENABLED(DWIN_CREALITY_LCD)
   #include "../../lcd/dwin/e3v2/dwin.h"
 #endif
@@ -60,6 +59,12 @@
 
 #define DEBUG_OUT ENABLED(DEBUG_LEVELING_FEATURE)
 #include "../../core/debug_out.h"
+
+#if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+  #include "../snapmaker/src/module/toolhead_3dp.h"
+  #include "../snapmaker/src/service/bed_level.h"
+  #include "../snapmaker/src/module/linear.h"
+#endif
 
 #if ENABLED(QUICK_HOME)
 
@@ -226,6 +231,12 @@ void GcodeSuite::G28() {
 
   SET_SOFT_ENDSTOP_LOOSE(false);  // Reset a leftover 'loose' motion state
 
+  #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    // External Module only reply when switch status changed.
+    // Force sync status here to avoid hitting boundary because of the limit switch out of sync. 
+    //linear.PollEndstop(LINEAR_AXIS_ALL);
+  #endif
+
   // Disable the leveling matrix before homing
   #if HAS_LEVELING
 
@@ -305,12 +316,9 @@ void GcodeSuite::G28() {
                home_all = homeX == homeY && homeX == homeZ, // All or None
                doX = home_all || homeX, doY = home_all || homeY, doZ = home_all || homeZ;
 
-    #if Z_HOME_DIR > 0  // If homing away from BED do Z first
-
-      if (doZ) homeaxis(Z_AXIS);
-
-    #endif
-
+    if (Z_HOME_DIR > 0)
+      if (home_all || homeZ) homeaxis(Z_AXIS);
+    
     const float z_homing_height =
       ENABLED(UNKNOWN_Z_NO_RAISE) && !TEST(axis_known_position, Z_AXIS)
         ? 0
@@ -366,8 +374,7 @@ void GcodeSuite::G28() {
 
     TERN_(IMPROVE_HOMING_RELIABILITY, end_slow_homing(slow_homing));
 
-    // Home Z last if homing towards the bed
-    #if Z_HOME_DIR < 0
+    if (Z_HOME_DIR < 0) {
 
       if (doZ) {
         TERN_(BLTOUCH, bltouch.init());
@@ -377,8 +384,7 @@ void GcodeSuite::G28() {
         probe.move_z_after_homing();
 
       } // doZ
-
-    #endif // Z_HOME_DIR < 0
+    }
 
     sync_plan_position();
 
@@ -430,7 +436,19 @@ void GcodeSuite::G28() {
     do_blocking_move_to_z(delta_clip_start_height);
   #endif
 
-  TERN_(RESTORE_LEVELING_AFTER_G28, set_bed_leveling_enabled(leveling_was_active));
+  #if HAS_LEVELING && ENABLED(RESTORE_LEVELING_AFTER_G28)
+    //set_bed_leveling_enabled(leveling_was_active);
+    //Always set bed leveling active after home all axis when in 3dprint mode
+  #endif
+
+  #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+    if((ModuleBase::toolhead() == MODULE_TOOLHEAD_3DP) && (all_axes_homed())) {
+      set_bed_leveling_enabled(true);
+      levelservice.ApplyLiveZOffset();
+    }
+  #else
+    TERN_(RESTORE_LEVELING_AFTER_G28, set_bed_leveling_enabled(leveling_was_active));
+  #endif
 
   restore_feedrate_and_scaling();
 
@@ -455,7 +473,6 @@ void GcodeSuite::G28() {
     #endif
   #endif
 
-  ui.refresh();
 
   TERN_(DWIN_CREALITY_LCD, DWIN_CompletedHoming());
 

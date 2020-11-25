@@ -25,13 +25,15 @@
  * feature/runout.h - Runout sensor support
  */
 
-#include "../sd/cardreader.h"
 #include "../module/printcounter.h"
 #include "../module/planner.h"
 #include "../module/stepper.h" // for block_t
 #include "../gcode/queue.h"
-
+#include "../module/endstops.h"
 #include "../inc/MarlinConfig.h"
+
+#include "../snapmaker/src/module/toolhead_3dp.h"
+#include "../snapmaker/src/service/system.h"
 
 #if ENABLED(EXTENSIBLE_UI)
   #include "../lcd/extui/ui_api.h"
@@ -40,6 +42,7 @@
 #if ENABLED(ADVANCED_PAUSE_FEATURE)
   #include "pause.h"
 #endif
+
 
 //#define FILAMENT_RUNOUT_SENSOR_DEBUG
 #ifndef FILAMENT_RUNOUT_THRESHOLD
@@ -69,12 +72,15 @@ extern FilamentMonitor runout;
 class FilamentMonitorBase {
   public:
     static bool enabled, filament_ran_out;
+    static millis_t ranout_timer;
 
     #if ENABLED(HOST_ACTION_COMMANDS)
       static bool host_handling;
     #else
       static constexpr bool host_handling = false;
     #endif
+  private:
+    static uint8_t statefromcan;
 };
 
 template<class RESPONSE_T, class SENSOR_T>
@@ -118,6 +124,7 @@ class TFilamentMonitor : public FilamentMonitorBase {
 
     // Give the response a chance to update its counter.
     static inline void run() {
+      uint32_t fault = systemservice.GetFaultFlag();
       if ( enabled && !filament_ran_out
         && (printingIsActive() || TERN0(ADVANCED_PAUSE_FEATURE, did_pause_print))
       ) {
@@ -129,9 +136,31 @@ class TFilamentMonitor : public FilamentMonitorBase {
         if (ran_out) {
           filament_ran_out = true;
           event_filament_runout();
-          planner.synchronize();
         }
       }
+      else if (enabled && (fault&FAULT_FLAG_FILAMENT)) {
+        if (is_filament_runout())
+          ranout_timer = millis() + 1000;
+        else {
+          // delay 1s to clear
+          if (millis() - ranout_timer > 0) {
+            filament_ran_out = false;
+            systemservice.ClearExceptionByFaultFlag(FAULT_FLAG_FILAMENT);
+          }
+        }
+      }
+    }
+
+    static uint8_t runout_states () { return sensor.poll_runout_states(); }
+
+    // query current state of sensor
+    // return true -> no filament
+    // return false -> filament is exist
+    static bool is_filament_runout() {
+      if (enabled)
+        return sensor.poll_runout_states();
+      else
+        return enabled;
     }
 };
 
@@ -148,6 +177,9 @@ class FilamentSensorBase {
     }
 
   public:
+    #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+      #define CAN_FILAMENT1_RUNOUT 1
+    #endif
     static inline void setup() {
       #if ENABLED(FIL_RUNOUT_PULLUP)
         #define INIT_RUNOUT_PIN(P) SET_INPUT_PULLUP(P)
@@ -157,22 +189,29 @@ class FilamentSensorBase {
         #define INIT_RUNOUT_PIN(P) SET_INPUT(P)
       #endif
 
-      #define _INIT_RUNOUT(N) INIT_RUNOUT_PIN(FIL_RUNOUT##N##_PIN);
+      #define _INIT_RUNOUT(N) TERN(CAN_FILAMENT##N##_RUNOUT,,INIT_RUNOUT_PIN(FIL_RUNOUT##N##_PIN));
       REPEAT_S(1, INCREMENT(NUM_RUNOUT_SENSORS), _INIT_RUNOUT)
       #undef _INIT_RUNOUT
       #undef INIT_RUNOUT_PIN
     }
 
+    #if (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     // Return a bitmask of runout pin states
     static inline uint8_t poll_runout_pins() {
-      #define _OR_RUNOUT(N) | (READ(FIL_RUNOUT##N##_PIN) ? _BV((N) - 1) : 0)
+      #define _OR_RUNOUT(N) | TERN(CAN_FILAMENT##N##_RUNOUT,(TEST(CanModules.Endstop, FILAMENT##N)? _BV((N) - 1):0),(READ(FIL_RUNOUT##N##_PIN) ? _BV((N) - 1) : 0))
       return (0 REPEAT_S(1, INCREMENT(NUM_RUNOUT_SENSORS), _OR_RUNOUT));
       #undef _OR_RUNOUT
     }
+    #endif
 
     // Return a bitmask of runout flag states (1 bits always indicates runout)
     static inline uint8_t poll_runout_states() {
-      return poll_runout_pins()
+      return
+        #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+          printer1->filament_state()
+        #else
+          poll_runout_pins()
+        #endif
         #if FIL_RUNOUT_STATE == LOW
           ^ uint8_t(_BV(NUM_RUNOUT_SENSORS) - 1)
         #endif
@@ -250,14 +289,14 @@ class FilamentSensorBase {
       static inline void run() {
         const bool out = poll_runout_state(active_extruder);
         if (!out) filament_present(active_extruder);
-        #ifdef FILAMENT_RUNOUT_SENSOR_DEBUG
+        //#ifdef FILAMENT_RUNOUT_SENSOR_DEBUG
           static bool was_out = false;
           if (out != was_out) {
             was_out = out;
             SERIAL_ECHOPGM("Filament ");
             serialprintPGM(out ? PSTR("OUT\n") : PSTR("IN\n"));
           }
-        #endif
+        //#endif
       }
   };
 

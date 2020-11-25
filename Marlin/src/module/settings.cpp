@@ -54,10 +54,11 @@
   #include "../lcd/dwin/e3v2/dwin.h"
 #endif
 
-#include "../lcd/ultralcd.h"
 #include "../libs/vector_3.h"   // for matrix_3x3
 #include "../gcode/gcode.h"
 #include "../MarlinCore.h"
+
+#include "../../../snapmaker/src/snapmaker.h"
 
 #if EITHER(EEPROM_SETTINGS, SD_FIRMWARE_UPDATE)
   #include "../HAL/shared/eeprom_api.h"
@@ -159,6 +160,8 @@ typedef struct {     bool X, Y, Z, X2, Y2, Z2, Z3, Z4, E0, E1, E2, E3, E4, E5, E
 
 // Limit an index to an array size
 #define ALIM(I,ARR) _MIN(I, (signed)COUNT(ARR) - 1)
+
+extern float nozzle_height_probed;
 
 // Defaults for reset / fill in on load
 static const uint32_t   _DMA[] PROGMEM = DEFAULT_MAX_ACCELERATION;
@@ -431,6 +434,26 @@ typedef struct SettingsDataStruct {
     touch_calibration_t touch_calibration;
   #endif
 
+  //
+  // Software machine resize
+  //
+  #if ENABLED(SW_MACHINE_SIZE)
+  float s_home_offset[XYZ];
+  float m_home_offset[XYZ];
+  float l_home_offset[XYZ];
+  #endif
+
+
+  //
+  // brightness for lightbar
+  //
+  //uint32_t  lb_brightness;
+
+  // nozzle height when probed bed
+  float nozzle_height_probed;
+
+
+  LEVEL_SERVICE_EEPROM_PARAM;
 } SettingsData;
 
 //static_assert(sizeof(SettingsData) <= MARLIN_EEPROM_SIZE, "EEPROM too small to contain SettingsData!");
@@ -1384,6 +1407,32 @@ void MarlinSettings::postprocess() {
     #endif
 
     //
+    // Software machine size
+    //
+    #if ENABLED(SW_MACHINE_SIZE)
+    {
+      LOOP_XYZ(i) {
+        _FIELD_TEST(s_home_offset[i]);
+        EEPROM_WRITE(s_home_offset[i]);
+        _FIELD_TEST(m_home_offset[i]);
+        EEPROM_WRITE(m_home_offset[i]);
+        _FIELD_TEST(l_home_offset[i]);
+        EEPROM_WRITE(l_home_offset[i]);
+      }
+    }
+    #endif //ENABLED(SW_MACHINE_SIZE)
+
+    // save brightness of light bar
+    //uint32_t lb_brightness = (uint32_t)lightbar.get_brightness();
+    //_FIELD_TEST(lb_brightness);
+    //EEPROM_WRITE(lb_brightness);
+
+    _FIELD_TEST(nozzle_height_probed);
+    EEPROM_WRITE(nozzle_height_probed);
+
+    LEVEL_SERVICE_EEPROM_WRITE();
+
+    //
     // Validate CRC and Data Size
     //
     if (!eeprom_error) {
@@ -1412,8 +1461,6 @@ void MarlinSettings::postprocess() {
         store_mesh(ubl.storage_slot);
     #endif
 
-    if (!eeprom_error) LCD_MESSAGEPGM(MSG_SETTINGS_STORED);
-
     TERN_(EXTENSIBLE_UI, ExtUI::onConfigurationStoreWritten(!eeprom_error));
 
     return !eeprom_error;
@@ -1441,7 +1488,6 @@ void MarlinSettings::postprocess() {
       }
       DEBUG_ECHO_START();
       DEBUG_ECHOLNPAIR("EEPROM version mismatch (EEPROM=", stored_ver, " Marlin=" EEPROM_VERSION ")");
-      TERN(EEPROM_AUTO_INIT,,ui.eeprom_alert_version());
       eeprom_error = true;
     }
     else {
@@ -1603,21 +1649,18 @@ void MarlinSettings::postprocess() {
         EEPROM_READ_ALWAYS(grid_max_x);                // 1 byte
         EEPROM_READ_ALWAYS(grid_max_y);                // 1 byte
         #if ENABLED(AUTO_BED_LEVELING_BILINEAR)
-          if (grid_max_x == GRID_MAX_POINTS_X && grid_max_y == GRID_MAX_POINTS_Y) {
-            if (!validating) set_bed_leveling_enabled(false);
-            EEPROM_READ(bilinear_grid_spacing);        // 2 ints
-            EEPROM_READ(bilinear_start);               // 2 ints
-            EEPROM_READ(z_values);                     // 9 to 256 floats
-          }
-          else // EEPROM data is stale
+          GRID_MAX_POINTS_X = grid_max_x;
+          GRID_MAX_POINTS_Y = grid_max_y;
+
+          ABL_GRID_POINTS_VIRT_X = (GRID_MAX_POINTS_X - 1) * (BILINEAR_SUBDIVISIONS) + 1;
+          ABL_GRID_POINTS_VIRT_Y = (GRID_MAX_POINTS_Y - 1) * (BILINEAR_SUBDIVISIONS) + 1;
+          ABL_TEMP_POINTS_X = (GRID_MAX_POINTS_X + 2);
+          ABL_TEMP_POINTS_Y = (GRID_MAX_POINTS_Y + 2);
+
+          EEPROM_READ(bilinear_grid_spacing);        // 2 ints
+          EEPROM_READ(bilinear_start);               // 2 ints
+          EEPROM_READ(z_values);                     // 9 to 256 floats
         #endif // AUTO_BED_LEVELING_BILINEAR
-          {
-            // Skip past disabled (or stale) Bilinear Grid data
-            xy_pos_t bgs, bs;
-            EEPROM_READ(bgs);
-            EEPROM_READ(bs);
-            for (uint16_t q = grid_max_x * grid_max_y; q--;) EEPROM_READ(dummyf);
-          }
       }
 
       //
@@ -2241,17 +2284,45 @@ void MarlinSettings::postprocess() {
         EEPROM_READ(touch.calibration);
       #endif
 
+      //
+      // Software machine size
+      //
+      #if ENABLED(SW_MACHINE_SIZE)
+      {
+        LOOP_XYZ(i) {
+          _FIELD_TEST(s_home_offset[i]);
+          EEPROM_READ(s_home_offset[i]);
+          _FIELD_TEST(m_home_offset[i]);
+          EEPROM_READ(m_home_offset[i]);
+          _FIELD_TEST(l_home_offset[i]);
+          EEPROM_READ(l_home_offset[i]);
+        }
+      }
+      #endif //ENABLED(SW_MACHINE_SIZE)
+
+      //
+      // load brightness for light bar
+      //
+      // {
+      //   uint32_t lb_brightness;
+      //   EEPROM_READ(lb_brightness);
+      //   lightbar.set_brightness(lb_brightness);
+      // }
+
+      _FIELD_TEST(nozzle_height_probed);
+      EEPROM_READ(nozzle_height_probed);
+
+      LEVEL_SERVICE_EEPROM_READ();
+
       eeprom_error = size_error(eeprom_index - (EEPROM_OFFSET));
       if (eeprom_error) {
         DEBUG_ECHO_START();
         DEBUG_ECHOLNPAIR("Index: ", int(eeprom_index - (EEPROM_OFFSET)), " Size: ", datasize());
-        TERN(EEPROM_AUTO_INIT,,ui.eeprom_alert_index());
       }
       else if (working_crc != stored_crc) {
         eeprom_error = true;
         DEBUG_ERROR_START();
         DEBUG_ECHOLNPAIR("EEPROM CRC mismatch - (stored) ", stored_crc, " != ", working_crc, " (calculated)!");
-        TERN(EEPROM_AUTO_INIT,,ui.eeprom_alert_crc());
       }
       else if (!validating) {
         DEBUG_ECHO_START();
@@ -2329,6 +2400,7 @@ void MarlinSettings::postprocess() {
       TERN_(EXTENSIBLE_UI, ExtUI::onConfigurationStoreRead(success));
       return success;
     }
+    systemservice.ThrowException(EHOST_MC, ETYPE_LOST_CFG);
     reset();
     #if ENABLED(EEPROM_AUTO_INIT)
       (void)save();
@@ -2850,6 +2922,27 @@ void MarlinSettings::reset() {
       password.is_set = false;
     #endif
   #endif
+
+  //
+  // Software machine size
+  //
+  #if ENABLED(SW_MACHINE_SIZE)
+  reset_homeoffset();
+  #endif //ENABLED(SW_MACHINE_SIZE)
+
+  GRID_MAX_POINTS_X = 3;
+  GRID_MAX_POINTS_Y = 3;
+
+  ABL_GRID_POINTS_VIRT_X = (GRID_MAX_POINTS_X - 1) * (BILINEAR_SUBDIVISIONS) + 1;
+  ABL_GRID_POINTS_VIRT_Y = (GRID_MAX_POINTS_Y - 1) * (BILINEAR_SUBDIVISIONS) + 1;
+  ABL_TEMP_POINTS_X = (GRID_MAX_POINTS_X + 2);
+  ABL_TEMP_POINTS_Y = (GRID_MAX_POINTS_Y + 2);
+
+  //lightbar.set_brightness(MAX_BRIGHTNESS);
+
+  nozzle_height_probed = 0;
+
+  LEVEL_SERVICE_EEPROM_RESET();
 
   postprocess();
 

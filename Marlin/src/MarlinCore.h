@@ -23,6 +23,8 @@
 
 #include "inc/MarlinConfig.h"
 
+#include "MapleFreeRTOS1030.h"
+
 #ifdef DEBUG_GCODE_PARSER
   #include "gcode/parser.h"
 #endif
@@ -30,6 +32,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+void reset_homeoffset();
 
 void stop();
 
@@ -123,3 +127,32 @@ extern const char NUL_STR[], M112_KILL_STR[], G28_STR[], M21_STR[], M23_STR[], M
                   SP_A_STR[], SP_B_STR[], SP_C_STR[],
                   SP_P_STR[], SP_T_STR[], SP_X_STR[], SP_Y_STR[], SP_Z_STR[], SP_E_STR[],
                   X_LBL[], Y_LBL[], Z_LBL[], E_LBL[], SP_X_LBL[], SP_Y_LBL[], SP_Z_LBL[], SP_E_LBL[];
+
+// Software machine size
+#if ENABLED(SW_MACHINE_SIZE)
+  extern bool X_DIR;
+  extern bool Y_DIR;
+  extern bool Z_DIR;
+  extern bool E_DIR;
+  extern signed char X_HOME_DIR;
+  extern signed char Y_HOME_DIR;
+  extern signed char Z_HOME_DIR;
+  extern float X_MAX_POS;
+  extern float Y_MAX_POS;
+  extern float Z_MAX_POS;
+  extern float X_MIN_POS;
+  extern float Y_MIN_POS;
+  extern float Z_MIN_POS;
+#endif //ENABLED(SW_MACHINE_SIZE)
+
+#if USE_EXECUTE_COMMANDS_IMMEDIATE
+#define process_cmd_imd(str) do{parser.parse(str); _
+                                gcode.execute_command();}while(0)
+#else
+#define process_cmd_imd(str) do{parser.parse(str); gcode.execute_command();}while(0)
+#endif
+
+#define UInt32ToBytes(u32V, pBuff) do{pBuff[0] = (uint8_t)(u32V >> 24); pBuff[1] = (uint8_t)(u32V >> 16); pBuff[2] = (uint8_t)(u32V >> 8); pBuff[3] = (uint8_t)(u32V); }while(0)
+#define UInt16ToBytes(u16V, pBuff) do{pBuff[0] = (uint8_t)(u16V >> 8); pBuff[1] = (uint8_t)(u16V);}while(0)
+
+#define AT_SNAP_SECTION   __attribute__((section(".snap")))

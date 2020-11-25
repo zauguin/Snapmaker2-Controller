@@ -627,9 +627,10 @@
 /**
  * Validate that the bed size fits
  */
+#if DISABLED(SW_MACHINE_SIZE)
 static_assert(X_MAX_LENGTH >= X_BED_SIZE, "Movement bounds (X_MIN_POS, X_MAX_POS) are too narrow to contain X_BED_SIZE.");
 static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS) are too narrow to contain Y_BED_SIZE.");
-
+#endif
 /**
  * Granular software endstops (Marlin >= 1.1.7)
  */
@@ -807,20 +808,21 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
 /**
  * Filament Runout needs one or more pins and either SD Support or Auto print start detection
  */
+#if (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
 #if HAS_FILAMENT_SENSOR
   #if !PIN_EXISTS(FIL_RUNOUT)
     #error "FILAMENT_RUNOUT_SENSOR requires FIL_RUNOUT_PIN."
   #elif NUM_RUNOUT_SENSORS > E_STEPPERS
     #error "NUM_RUNOUT_SENSORS cannot exceed the number of E steppers."
-  #elif NUM_RUNOUT_SENSORS > 1 && !PIN_EXISTS(FIL_RUNOUT2)
+  #elif NUM_RUNOUT_SENSORS > 1 && !PIN_EXISTS(FIL_RUNOUT2) && DISABLED(CAN_FILAMENT2_RUNOUT)
     #error "FILAMENT_RUNOUT_SENSOR with NUM_RUNOUT_SENSORS > 1 requires FIL_RUNOUT2_PIN."
-  #elif NUM_RUNOUT_SENSORS > 2 && !PIN_EXISTS(FIL_RUNOUT3)
+  #elif NUM_RUNOUT_SENSORS > 2 && !PIN_EXISTS(FIL_RUNOUT3) && DISABLED(CAN_FILAMENT3_RUNOUT)
     #error "FILAMENT_RUNOUT_SENSOR with NUM_RUNOUT_SENSORS > 2 requires FIL_RUNOUT3_PIN."
-  #elif NUM_RUNOUT_SENSORS > 3 && !PIN_EXISTS(FIL_RUNOUT4)
+  #elif NUM_RUNOUT_SENSORS > 3 && !PIN_EXISTS(FIL_RUNOUT4) && DISABLED(CAN_FILAMENT4_RUNOUT)
     #error "FILAMENT_RUNOUT_SENSOR with NUM_RUNOUT_SENSORS > 3 requires FIL_RUNOUT4_PIN."
-  #elif NUM_RUNOUT_SENSORS > 4 && !PIN_EXISTS(FIL_RUNOUT5)
+  #elif NUM_RUNOUT_SENSORS > 4 && !PIN_EXISTS(FIL_RUNOUT5) && DISABLED(CAN_FILAMENT5_RUNOUT)
     #error "FILAMENT_RUNOUT_SENSOR with NUM_RUNOUT_SENSORS > 4 requires FIL_RUNOUT5_PIN."
-  #elif NUM_RUNOUT_SENSORS > 5 && !PIN_EXISTS(FIL_RUNOUT6)
+  #elif NUM_RUNOUT_SENSORS > 5 && !PIN_EXISTS(FIL_RUNOUT6) && DISABLED(CAN_FILAMENT6_RUNOUT)
     #error "FILAMENT_RUNOUT_SENSOR with NUM_RUNOUT_SENSORS > 5 requires FIL_RUNOUT6_PIN."
   #elif NONE(SDSUPPORT, PRINTJOB_TIMER_AUTOSTART)
     #error "FILAMENT_RUNOUT_SENSOR requires SDSUPPORT or PRINTJOB_TIMER_AUTOSTART."
@@ -830,10 +832,12 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
     static_assert(nullptr == strstr(FILAMENT_RUNOUT_SCRIPT, "M600"), "ADVANCED_PAUSE_FEATURE is required to use M600 with FILAMENT_RUNOUT_SENSOR.");
   #endif
 #endif
+#endif
 
 /**
  * Advanced Pause
  */
+#if (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
 #if ENABLED(ADVANCED_PAUSE_FEATURE)
   #if !HAS_RESUME_CONTINUE
     #error "ADVANCED_PAUSE_FEATURE requires a supported LCD controller (or EMERGENCY_PARSER)."
@@ -855,14 +859,17 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
     #error "FILAMENT_CHANGE_FAST_LOAD_LENGTH must be less than or equal to EXTRUDE_MAXLENGTH."
   #endif
 #endif
+#endif
 
 #if ENABLED(NOZZLE_PARK_FEATURE)
   constexpr float npp[] = NOZZLE_PARK_POINT;
   static_assert(COUNT(npp) == XYZ, "NOZZLE_PARK_POINT requires X, Y, and Z values.");
   constexpr xyz_pos_t npp_xyz = NOZZLE_PARK_POINT;
-  static_assert(WITHIN(npp_xyz.x, X_MIN_POS, X_MAX_POS), "NOZZLE_PARK_POINT.X is out of bounds (X_MIN_POS, X_MAX_POS).");
-  static_assert(WITHIN(npp_xyz.y, Y_MIN_POS, Y_MAX_POS), "NOZZLE_PARK_POINT.Y is out of bounds (Y_MIN_POS, Y_MAX_POS).");
-  static_assert(WITHIN(npp_xyz.z, Z_MIN_POS, Z_MAX_POS), "NOZZLE_PARK_POINT.Z is out of bounds (Z_MIN_POS, Z_MAX_POS).");
+  #if DISABLED(SW_MACHINE_SIZE)
+    static_assert(WITHIN(npp_xyz.x, X_MIN_POS, X_MAX_POS), "NOZZLE_PARK_POINT.X is out of bounds (X_MIN_POS, X_MAX_POS).");
+    static_assert(WITHIN(npp_xyz.y, Y_MIN_POS, Y_MAX_POS), "NOZZLE_PARK_POINT.Y is out of bounds (Y_MIN_POS, Y_MAX_POS).");
+    static_assert(WITHIN(npp_xyz.z, Z_MIN_POS, Z_MAX_POS), "NOZZLE_PARK_POINT.Z is out of bounds (Z_MIN_POS, Z_MAX_POS).");
+  #endif
 #endif
 
 /**
@@ -1314,7 +1321,7 @@ static_assert(Y_MAX_LENGTH >= Y_BED_SIZE, "Movement bounds (Y_MIN_POS, Y_MAX_POS
     #elif Z_MIN_PROBE_ENDSTOP_INVERTING != Z_MIN_ENDSTOP_INVERTING
       #error "Z_MIN_PROBE_USES_Z_MIN_ENDSTOP_PIN requires Z_MIN_ENDSTOP_INVERTING to match Z_MIN_PROBE_ENDSTOP_INVERTING."
     #endif
-  #elif !HAS_Z_MIN_PROBE_PIN
+  #elif !HAS_Z_MIN_PROBE_PIN && (MOTHERBOARD != BOARD_SNAPMAKER_2_0)
     #error "Z_MIN_PROBE_PIN must be defined if Z_MIN_PROBE_USES_Z_MIN_ENDSTOP_PIN is not enabled."
   #endif
 
@@ -1508,7 +1515,7 @@ static_assert(hbm[Z_AXIS] >= 0, "HOMING_BUMP_MM.Z must be greater than or equal 
 /**
  * Make sure Z_SAFE_HOMING point is reachable
  */
-#if ENABLED(Z_SAFE_HOMING)
+#if ENABLED(Z_SAFE_HOMING) && DISABLED(SW_MACHINE_SIZE)
   static_assert(WITHIN(Z_SAFE_HOMING_X_POINT, X_MIN_POS, X_MAX_POS), "Z_SAFE_HOMING_X_POINT can't be reached by the nozzle.");
   static_assert(WITHIN(Z_SAFE_HOMING_Y_POINT, Y_MIN_POS, Y_MAX_POS), "Z_SAFE_HOMING_Y_POINT can't be reached by the nozzle.");
 #endif

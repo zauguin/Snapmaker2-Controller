@@ -189,17 +189,21 @@
  * M114: Report the current position to host.
  *       Since steppers are moving, the count positions are
  *       projected by using planner calculations.
+ *   S - Sync the planner.
  *   D - Report more detail. This syncs the planner. (Requires M114_DETAIL)
  *   E - Report E stepper position (Requires M114_DETAIL)
  *   R - Report the realtime position instead of projected.
  */
 void GcodeSuite::M114() {
 
+  const bool sync_planner = ENABLED(M114_LEGACY) || parser.seen('S');
+  if (sync_planner)
+    planner.synchronize();
+
   #if ENABLED(M114_DETAIL)
     if (parser.seen('D')) {
-      #if DISABLED(M114_LEGACY)
+      if (!sync_planner)
         planner.synchronize();
-      #endif
       report_current_position();
       report_current_position_detail();
       return;
@@ -214,6 +218,5 @@ void GcodeSuite::M114() {
     if (parser.seen('R')) { report_real_position(); return; }
   #endif
 
-  TERN_(M114_LEGACY, planner.synchronize());
   report_current_position_projected();
 }

@@ -60,6 +60,7 @@ bool GcodeSuite::select_coordinate_system(const int8_t _new) {
 void GcodeSuite::G53() {
   const int8_t old_system = active_coordinate_system;
   select_coordinate_system(-1);   // Always remove workspace offsets
+
   #ifdef DEBUG_M53
     SERIAL_ECHOLNPGM("Go to native space");
     report_current_position();

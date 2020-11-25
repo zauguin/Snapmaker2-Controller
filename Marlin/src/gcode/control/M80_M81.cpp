@@ -25,7 +25,6 @@
 #include "../../module/temperature.h"
 #include "../../module/planner.h"       // for planner.finish_and_disable
 #include "../../module/printcounter.h"  // for print_job_timer.stop
-#include "../../lcd/ultralcd.h"         // for LCD_MESSAGEPGM_P
 
 #include "../../inc/MarlinConfig.h"
 
@@ -107,6 +106,4 @@ void GcodeSuite::M81() {
   #elif ENABLED(PSU_CONTROL)
     PSU_OFF();
   #endif
-
-  LCD_MESSAGEPGM_P(PSTR(MACHINE_NAME " " STR_OFF "."));
 }

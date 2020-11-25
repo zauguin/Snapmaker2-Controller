@@ -22,7 +22,6 @@
 
 #include "../gcode.h"
 #include "../../module/printcounter.h"
-#include "../../lcd/ultralcd.h"
 
 #include "../../MarlinCore.h" // for startOrResumeJob
 

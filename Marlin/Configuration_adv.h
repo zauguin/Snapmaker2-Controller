@@ -187,7 +187,7 @@
  */
 #if ENABLED(THERMAL_PROTECTION_HOTENDS)
   #define THERMAL_PROTECTION_PERIOD 40        // Seconds
-  #define THERMAL_PROTECTION_HYSTERESIS 4     // Degrees Celsius
+  #define THERMAL_PROTECTION_HYSTERESIS 10     // Degrees Celsius
 
   //#define ADAPTIVE_FAN_SLOWING              // Slow part cooling fan if temperature drops
   #if BOTH(ADAPTIVE_FAN_SLOWING, PIDTEMP)
@@ -206,23 +206,45 @@
    * and/or decrease WATCH_TEMP_INCREASE. WATCH_TEMP_INCREASE should not be set
    * below 2.
    */
-  #define WATCH_TEMP_PERIOD 20                // Seconds
+  #define WATCH_TEMP_PERIOD   20                // Seconds
   #define WATCH_TEMP_INCREASE 2               // Degrees Celsius
+
+  #define WATCH_TEMP_TARGET_START   100
+
+  #define WATCH_TEMP_DROP_DEBOUNCE  3
+  #define WATCH_TEMP_DROP_PERIOD    2
+  #define WATCH_TEMP_DROP_LIMIT     20
+  #define WATCH_TEMP_DROP_DELTA     2
+
+  #define WATCH_TEMP_NOTHEATED_DEBOUNCE 4
+  #define WATCH_TEMP_NOTHEATED_PERIOD   5   // Seconds
+  #define WATCH_TEMP_NOTHEATED_LIMIT    15  // Degrees Celsius
+  #define WATCH_TEMP_NOTHEATED_DELTA    3   // Degrees Celsius
 #endif
 
 /**
  * Thermal Protection parameters for the bed are just as above for hotends.
  */
 #if ENABLED(THERMAL_PROTECTION_BED)
-  #define THERMAL_PROTECTION_BED_PERIOD        20 // Seconds
-  #define THERMAL_PROTECTION_BED_HYSTERESIS     2 // Degrees Celsius
+  #define THERMAL_PROTECTION_BED_PERIOD       120 // Seconds
+  #define THERMAL_PROTECTION_BED_HYSTERESIS     5 // Degrees Celsius
 
   /**
    * As described above, except for the bed (M140/M190/M303).
    */
-  #define WATCH_BED_TEMP_PERIOD                60 // Seconds
+  #define WATCH_BED_TEMP_PERIOD               120 // Seconds
   #define WATCH_BED_TEMP_INCREASE               2 // Degrees Celsius
+
+  #define WATCH_BED_TEMP_DROP_DEBOUNCE          3
+  #define WATCH_BED_TEMP_DROP_PERIOD            2 // Seconds
+  #define WATCH_BED_TEMP_DROP_LIMIT             6
+  #define WATCH_BED_TEMP_DROP_DELTA             1 // Degrees Celsius
 #endif
+  #define WATCH_BED_TEMP_TARGET_START          50 // Degrees Celsius
+  #define WATCH_BED_TEMP_NOTHEATED_DEBOUNCE    10
+  #define WATCH_BED_TEMP_NOTHEATED_PERIOD      10 // Seconds
+  #define WATCH_BED_TEMP_NOTHEATED_LIMIT       10 // Degrees Celsius
+  #define WATCH_BED_TEMP_NOTHEATED_DELTA        2 // Degrees Celsius
 
 /**
  * Thermal Protection parameters for the heated chamber.
@@ -522,7 +544,7 @@
 
 // If you want endstops to stay on (by default) even when not homing
 // enable this option. Override at any time with M120, M121.
-//#define ENDSTOPS_ALWAYS_ON_DEFAULT
+#define ENDSTOPS_ALWAYS_ON_DEFAULT
 
 // @section extras
 
@@ -653,8 +675,8 @@
 
 //#define SENSORLESS_BACKOFF_MM  { 2, 2 }     // (mm) Backoff from endstops before sensorless homing
 
-#define HOMING_BUMP_MM      { 5, 5, 2 }       // (mm) Backoff from endstops after first bump
-#define HOMING_BUMP_DIVISOR { 2, 2, 4 }       // Re-Bump Speed Divisor (Divides the Homing Feedrate)
+#define HOMING_BUMP_MM      { 3, 3, 3 }       // (mm) Backoff from endstops after first bump
+#define HOMING_BUMP_DIVISOR { 9, 9, 10 }      // Re-Bump Speed Divisor (Divides the Homing Feedrate)
 
 //#define HOMING_BACKOFF_POST_MM { 2, 2, 2 }  // (mm) Backoff from endstops after homing
 
@@ -839,10 +861,10 @@
  * The Deactive Time can be overridden with M18 and M84. Set to 0 for No Timeout.
  */
 #define DEFAULT_STEPPER_DEACTIVE_TIME 120
-#define DISABLE_INACTIVE_X true
-#define DISABLE_INACTIVE_Y true
-#define DISABLE_INACTIVE_Z true  // Set 'false' if the nozzle could fall onto your printed part!
-#define DISABLE_INACTIVE_E true
+#define DISABLE_INACTIVE_X false
+#define DISABLE_INACTIVE_Y false
+#define DISABLE_INACTIVE_Z false // Set 'false' if the nozzle could fall onto your printed part!
+#define DISABLE_INACTIVE_E false
 
 // If the Nozzle or Bed falls when the Z stepper is disabled, set its resting position here.
 //#define Z_AFTER_DEACTIVATE Z_HOME_POS
@@ -883,7 +905,7 @@
 // Backlash Compensation
 // Adds extra movement to axes on direction-changes to account for backlash.
 //
-//#define BACKLASH_COMPENSATION
+#define BACKLASH_COMPENSATION
 #if ENABLED(BACKLASH_COMPENSATION)
   // Define values for backlash distance and correction.
   // If BACKLASH_GCODE is enabled these values are the defaults.
@@ -895,11 +917,11 @@
   //#define BACKLASH_SMOOTHING_MM 3 // (mm)
 
   // Add runtime configuration and tuning of backlash values (M425)
-  //#define BACKLASH_GCODE
+  #define BACKLASH_GCODE
 
   #if ENABLED(BACKLASH_GCODE)
     // Measure the Z backlash when probing (G29) and set with "M425 Z"
-    #define MEASURE_BACKLASH_WHEN_PROBING
+    // #define MEASURE_BACKLASH_WHEN_PROBING
 
     #if ENABLED(MEASURE_BACKLASH_WHEN_PROBING)
       // When measuring, the probe will move up to BACKLASH_MEASUREMENT_LIMIT
@@ -1170,7 +1192,7 @@
 
   #define SD_PROCEDURE_DEPTH 1              // Increase if you need more nested M32 calls
 
-  #define SD_FINISHED_STEPPERRELEASE true   // Disable steppers when SD Print is finished
+  #define SD_FINISHED_STEPPERRELEASE false  // Disable steppers when SD Print is finished
   #define SD_FINISHED_RELEASECOMMAND "M84"  // Use "M84XYE" to keep Z enabled so your bed stays in place
 
   // Reverse SD sort to show "more recent" files first, according to the card's FAT.
@@ -1293,6 +1315,7 @@
    * [1] On AVR an interrupt-capable pin is best for UHS3 compatibility.
    */
   //#define USB_FLASH_DRIVE_SUPPORT
+  #define USB_HOST_UDISK_SUPPORT
   #if ENABLED(USB_FLASH_DRIVE_SUPPORT)
     #define USB_CS_PIN    SDSS
     #define USB_INTR_PIN  SD_DETECT_PIN
@@ -1589,7 +1612,7 @@
  * NOTE: This method is less reliable as it can only catch hangups while
  * interrupts are enabled.
  */
-#define USE_WATCHDOG
+//#define USE_WATCHDOG
 #if ENABLED(USE_WATCHDOG)
   //#define WATCHDOG_RESET_MANUAL
 #endif
@@ -1650,12 +1673,12 @@
  *
  * See https://marlinfw.org/docs/features/lin_advance.html for full instructions.
  */
-//#define LIN_ADVANCE
+#define LIN_ADVANCE
 #if ENABLED(LIN_ADVANCE)
   //#define EXTRA_LIN_ADVANCE_K // Enable for second linear advance constants
   #define LIN_ADVANCE_K 0.22    // Unit: mm compression per 1mm/s extruder speed
   //#define LA_DEBUG            // If enabled, this will generate debug information output over USB.
-  //#define EXPERIMENTAL_SCURVE // Enable this option to permit S-Curve Acceleration
+  #define EXPERIMENTAL_SCURVE // Enable this option to permit S-Curve Acceleration
 #endif
 
 // @section leveling
@@ -1693,10 +1716,10 @@
  * the probe to be unable to reach any points.
  */
 #if PROBE_SELECTED && !IS_KINEMATIC
-  //#define PROBING_MARGIN_LEFT PROBING_MARGIN
-  //#define PROBING_MARGIN_RIGHT PROBING_MARGIN
-  //#define PROBING_MARGIN_FRONT PROBING_MARGIN
-  //#define PROBING_MARGIN_BACK PROBING_MARGIN
+  #define PROBING_MARGIN_LEFT 30
+  #define PROBING_MARGIN_RIGHT 10
+  #define PROBING_MARGIN_FRONT 30
+  #define PROBING_MARGIN_BACK 10
 #endif
 
 #if EITHER(MESH_BED_LEVELING, AUTO_BED_LEVELING_UBL)
@@ -1823,9 +1846,9 @@
  * and optionally G38.4 and G38.5 (probe away from target).
  * Set MULTIPLE_PROBING for G38 to probe more than once.
  */
-//#define G38_PROBE_TARGET
+#define G38_PROBE_TARGET
 #if ENABLED(G38_PROBE_TARGET)
-  //#define G38_PROBE_AWAY        // Include G38.4 and G38.5 to probe away from target
+  #define G38_PROBE_AWAY        // Include G38.4 and G38.5 to probe away from target
   #define G38_MINIMUM_MOVE 0.0275 // (mm) Minimum distance that will produce a move.
 #endif
 
@@ -1901,6 +1924,8 @@
 // The ASCII buffer for serial input
 #define MAX_CMD_SIZE 96
 #define BUFSIZE 4
+#define HMI_BUFSIZE 8
+#define INVALID_CMD_LINE  0xFFFFFFFFU
 
 // Transmission to Host Buffer Size
 // To save 386 bytes of PROGMEM (and TX_BUFFER_SIZE+3 bytes of RAM) set to 0.
@@ -1950,7 +1975,7 @@
 // Therefore some clients abort after 30 seconds in a timeout.
 // Some other clients start sending commands while receiving a 'wait'.
 // This "wait" is only sent when the buffer is empty. 1 second is a good value here.
-//#define NO_TIMEOUTS 1000 // Milliseconds
+#define NO_TIMEOUTS 1000 // Milliseconds
 
 // Some clients will have this feature soon. This could make the NO_TIMEOUTS unnecessary.
 //#define ADVANCED_OK
@@ -2089,12 +2114,12 @@
  */
 //#define ADVANCED_PAUSE_FEATURE
 #if ENABLED(ADVANCED_PAUSE_FEATURE)
-  #define PAUSE_PARK_RETRACT_FEEDRATE         60  // (mm/s) Initial retract feedrate.
-  #define PAUSE_PARK_RETRACT_LENGTH            2  // (mm) Initial retract.
+  #define PAUSE_PARK_RETRACT_FEEDRATE         50  // (mm/s) Initial retract feedrate.
+  #define PAUSE_PARK_RETRACT_LENGTH            6  // (mm) Initial retract.
                                                   // This short retract is done immediately, before parking the nozzle.
-  #define FILAMENT_CHANGE_UNLOAD_FEEDRATE     10  // (mm/s) Unload filament feedrate. This can be pretty fast.
+  #define FILAMENT_CHANGE_UNLOAD_FEEDRATE      5  // (mm/s) Unload filament feedrate. This can be pretty fast.
   #define FILAMENT_CHANGE_UNLOAD_ACCEL        25  // (mm/s^2) Lower acceleration may allow a faster feedrate.
-  #define FILAMENT_CHANGE_UNLOAD_LENGTH      100  // (mm) The length of filament for a complete unload.
+  #define FILAMENT_CHANGE_UNLOAD_LENGTH       60  // (mm) The length of filament for a complete unload.
                                                   //   For Bowden, the full length of the tube and nozzle.
                                                   //   For direct drive, the full length of the nozzle.
                                                   //   Set to 0 for manual unloading.
@@ -3099,7 +3124,7 @@
  * Enables G53 and G54-G59.3 commands to select coordinate systems
  * and G92.1 to reset the workspace to native machine space.
  */
-//#define CNC_COORDINATE_SYSTEMS
+#define CNC_COORDINATE_SYSTEMS
 
 /**
  * Auto-report temperatures with M155 S<seconds>
@@ -3197,9 +3222,9 @@
 //#define GCODE_MOTION_MODES  // Remember the motion mode (G0 G1 G2 G3 G5 G38.X) and apply for X Y Z E F, etc.
 
 // Enable and set a (default) feedrate for all G0 moves
-//#define G0_FEEDRATE 3000 // (mm/min)
+#define G0_FEEDRATE 3000 // (mm/min)
 #ifdef G0_FEEDRATE
-  //#define VARIABLE_G0_FEEDRATE // The G0 feedrate is set by F in G0 motion mode
+  #define VARIABLE_G0_FEEDRATE // The G0 feedrate is set by F in G0 motion mode
 #endif
 
 /**

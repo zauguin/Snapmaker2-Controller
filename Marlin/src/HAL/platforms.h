@@ -35,6 +35,8 @@
   #define HAL_PATH(PATH, NAME) XSTR(PATH/TEENSY40_41/NAME)
 #elif defined(TARGET_LPC1768)
   #define HAL_PATH(PATH, NAME) XSTR(PATH/LPC1768/NAME)
+#elif defined(TARGET_GD32F1)
+  #define HAL_PATH(PATH, NAME) XSTR(PATH/GD32F1/NAME)
 #elif defined(__STM32F1__) || defined(TARGET_STM32F1)
   #define HAL_PATH(PATH, NAME) XSTR(PATH/STM32F1/NAME)
 #elif defined(STM32GENERIC) && (defined(STM32F4) || defined(STM32F7))

@@ -33,7 +33,6 @@
 #include "../gcode.h"
 #include "../../module/temperature.h"
 #include "../../module/motion.h"
-#include "../../lcd/ultralcd.h"
 
 #if ENABLED(PRINTJOB_TIMER_AUTOSTART)
   #include "../../module/printcounter.h"
@@ -129,8 +128,6 @@ void GcodeSuite::M190() {
   thermalManager.setTargetBed(temp);
 
   TERN_(PRINTJOB_TIMER_AUTOSTART, thermalManager.check_timer_autostart(true, false));
-
-  ui.set_status_P(thermalManager.isHeatingBed() ? GET_TEXT(MSG_BED_HEATING) : GET_TEXT(MSG_BED_COOLING));
 
   thermalManager.wait_for_bed(no_wait_for_cooling);
 }

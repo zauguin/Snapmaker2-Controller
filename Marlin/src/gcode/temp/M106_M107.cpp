@@ -22,7 +22,7 @@
 
 #include "../../inc/MarlinConfig.h"
 
-#if HAS_FAN
+//#if HAS_FAN
 
 #include "../gcode.h"
 #include "../../module/motion.h"
@@ -32,7 +32,11 @@
   #include "../../lcd/ultralcd.h"
 #endif
 
-#if ENABLED(SINGLENOZZLE)
+#if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+  #include "../../../../snapmaker/src/module/toolhead_3dp.h"
+  #define _ALT_P 0
+  #define _CNT_P 4
+#elif ENABLED(SINGLENOZZLE)
   #define _ALT_P active_extruder
   #define _CNT_P EXTRUDERS
 #else
@@ -64,7 +68,7 @@ void GcodeSuite::M106() {
       if (t > 0) return thermalManager.set_temp_fan_speed(pfan, t);
     #endif
 
-    const uint16_t dspeed = parser.seen('A') ? thermalManager.fan_speed[active_extruder] : 255;
+    const uint16_t dspeed = TERN_(HAS_FAN, parser.seen('A') ? thermalManager.fan_speed[active_extruder] :) 255;
 
     uint16_t speed = dspeed;
 
@@ -75,12 +79,16 @@ void GcodeSuite::M106() {
     #else
       constexpr bool got_preset = false;
     #endif
-
     if (!got_preset && parser.seenval('S'))
       speed = parser.value_ushort();
 
     // Set speed, with constraint
-    thermalManager.set_fan_speed(pfan, speed);
+    #if MOTHERBOARD == BOARD_SNAPMAKER_2_0
+      printer1->SetFan
+    #else
+      thermalManager.set_fan_speed
+    #endif
+      (pfan, speed);
   }
 }
 
@@ -89,7 +97,14 @@ void GcodeSuite::M106() {
  */
 void GcodeSuite::M107() {
   const uint8_t p = parser.byteval('P', _ALT_P);
-  thermalManager.set_fan_speed(p, 0);
+  if(p >= _CNT_P)
+    return;
+  #if MOTHERBOARD == BOARD_SNAPMAKER_2_0
+    printer1->SetFan
+  #else
+    thermalManager.set_fan_speed
+  #endif
+    (p, 0);
 }
 
-#endif // HAS_FAN
+//#endif // HAS_FAN

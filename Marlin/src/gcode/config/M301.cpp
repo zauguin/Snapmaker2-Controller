@@ -27,6 +27,10 @@
 #include "../gcode.h"
 #include "../../module/temperature.h"
 
+#if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+  #include "../../../../snapmaker/src/module/toolhead_3dp.h"
+#endif
+
 /**
  * M301: Set PID parameters P I D (and optionally C, L)
  *
@@ -83,6 +87,11 @@ void GcodeSuite::M301() {
     #endif
 
     SERIAL_EOL();
+    #if (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+      printer1->SetPID(0, PID_PARAM(Kp, e));
+      printer1->SetPID(1, PID_PARAM(Ki, e));
+      printer1->SetPID(2, PID_PARAM(Kd, e));
+    #endif
   }
   else
     SERIAL_ERROR_MSG(STR_INVALID_EXTRUDER);

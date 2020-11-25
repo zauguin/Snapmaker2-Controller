@@ -22,7 +22,6 @@
 
 #include "../gcode.h"
 #include "../../MarlinCore.h" // for stepper_inactive_time, disable_e_steppers
-#include "../../lcd/ultralcd.h"
 #include "../../module/stepper.h"
 
 #if ENABLED(AUTO_BED_LEVELING_UBL)
@@ -40,7 +39,6 @@ void GcodeSuite::M17() {
     if (TERN0(HAS_E_STEPPER_ENABLE, parser.seen('E'))) enable_e_steppers();
   }
   else {
-    LCD_MESSAGEPGM(MSG_NO_MOVE);
     enable_all_steppers();
   }
 }

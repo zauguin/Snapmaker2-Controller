@@ -66,10 +66,11 @@
 #include "stepper.h"
 #include "motion.h"
 #include "temperature.h"
-#include "../lcd/ultralcd.h"
 #include "../gcode/parser.h"
 
 #include "../MarlinCore.h"
+
+#include "../../../snapmaker/src/snapmaker.h"
 
 #if HAS_LEVELING
   #include "../feature/bedlevel/bedlevel.h"
@@ -1461,7 +1462,7 @@ void Planner::check_axes_activity() {
 
 #if HAS_LEVELING
 
-  constexpr xy_pos_t level_fulcrum = {
+  TERN(SW_MACHINE_SIZE, const, constexpr) xy_pos_t level_fulcrum = {
     TERN(Z_SAFE_HOMING, Z_SAFE_HOMING_X_POINT, X_HOME_POS),
     TERN(Z_SAFE_HOMING, Z_SAFE_HOMING_Y_POINT, Y_HOME_POS)
   };
@@ -1696,6 +1697,8 @@ bool Planner::_buffer_steps(const xyze_long_t &target
   // Wait for the next available block
   uint8_t next_buffer_head;
   block_t * const block = get_next_free_block(next_buffer_head);
+  if(block == NULL)
+    return false;
 
   // Fill the block with the specified movement
   if (!_populate_block(block, false, target
@@ -1712,6 +1715,12 @@ bool Planner::_buffer_steps(const xyze_long_t &target
     return true;
   }
 
+  // record the gcode line number in its block, then we can use in power-loss data recording
+  if (queue.length)
+    block->filePos = queue.command_line();
+  else
+    block->filePos = INVALID_CMD_LINE;
+
   // If this is the first added movement, reload the delay, otherwise, cancel it.
   if (block_buffer_head == block_buffer_tail) {
     // If it was the first queued block, restart the 1st block delivery delay, to
@@ -1719,7 +1728,13 @@ bool Planner::_buffer_steps(const xyze_long_t &target
     // As there are no queued movements, the Stepper ISR will not touch this
     // variable, so there is no risk setting this here (but it MUST be done
     // before the following line!!)
-    delay_before_delivering = BLOCK_DELAY_FOR_1ST_MOVE;
+    if (MODULE_TOOLHEAD_LASER == ModuleBase::toolhead()) {
+      // Laser greyscale is special case that queue only have one item is normal.
+      // Adding extra delay will cause long print time.
+      delay_before_delivering = 0;
+    } else {
+      delay_before_delivering = BLOCK_DELAY_FOR_1ST_MOVE;
+    }
   }
 
   // Move buffer head
@@ -2657,7 +2672,13 @@ void Planner::buffer_sync_block() {
     // As there are no queued movements, the Stepper ISR will not touch this
     // variable, so there is no risk setting this here (but it MUST be done
     // before the following line!!)
-    delay_before_delivering = BLOCK_DELAY_FOR_1ST_MOVE;
+    if (MODULE_TOOLHEAD_LASER == ModuleBase::toolhead()) {
+      // Laser greyscale is special case that queue only have one item is normal.
+      // Adding extra delay will cause long print time.
+      delay_before_delivering = 0;
+    } else {
+      delay_before_delivering = BLOCK_DELAY_FOR_1ST_MOVE;
+    }
   }
 
   block_buffer_head = next_buffer_head;
