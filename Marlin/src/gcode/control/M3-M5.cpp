@@ -68,7 +68,11 @@
  */
 void GcodeSuite::M3_M4(const bool is_M4) {
   auto get_s_power = [] {
-    if (parser.seenval('S') || parser.seenval('P')) {
+    if (
+        #if CUTTER_UNIT_IS(PERCENT)
+          parser.seenval('P') ||
+        #endif
+        parser.seenval('S')) {
       const float spwr = parser.value_float();
       cutter.unitPower = TERN(SPINDLE_LASER_PWM,
                               cutter.power_to_range(cutter_power_t(spwr)),
