@@ -1,8 +1,11 @@
 # extra script for linker and compile options
 Import("env")
 env.Append(
-  CCFLAGS=[ #"-mfpu=fpv4-sp-d16",
-#           "-mfloat-abi=hard",
+  LINKFLAGS=[ "-mfpu=fpv4-sp-d16",
+              "-mfloat-abi=hard"
+  ],
+  CCFLAGS=[ "-mfpu=fpv4-sp-d16",
+            "-mfloat-abi=hard",
 
             "-fsigned-char",
             "-fno-move-loop-invariants",
