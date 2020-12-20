@@ -27,7 +27,7 @@
 #include <src/module/endstops.h>
 #include <src/module/settings.h>
 
-#include "../../../../snapmaker/src/snapmaker.h"
+#include "../../../../../snapmaker/src/snapmaker.h"
 
 /**
  * G29.cpp - Auto Bed Leveling

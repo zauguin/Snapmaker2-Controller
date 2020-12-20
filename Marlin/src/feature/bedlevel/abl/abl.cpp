@@ -31,7 +31,7 @@
 
 #define DEBUG_OUT ENABLED(DEBUG_LEVELING_FEATURE)
 #include "../../../core/debug_out.h"
-#include "../../../../snapmaker/src/snapmaker.h"
+#include "../../../../../snapmaker/src/snapmaker.h"
 
 #if ENABLED(EXTENSIBLE_UI)
   #include "../../../lcd/extui/ui_api.h"
