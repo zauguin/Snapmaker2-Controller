@@ -28,7 +28,7 @@
 
 extern "C" {
 
-void vApplicationStackOverflowHook(xTaskHandle *pxTask,
+void vApplicationStackOverflowHook(TaskHandle_t *pxTask,
                                    signed char *pcTaskName) {
     /* This function will get called if a task overflows its stack.
      * If the parameters are corrupt then inspect pxCurrentTCB to find

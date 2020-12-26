@@ -121,7 +121,7 @@ class CanHost {
     // command queue from ReceiveHandler() to EventHandler for standard command
     MessageBufferHandle_t std_cmd_q_;
     CanStdWaitNode_t      std_wait_q_[CAN_STD_WAIT_QUEUE_MAX];
-    xSemaphoreHandle      std_wait_lock_;
+    SemaphoreHandle_t     std_wait_lock_;
 
     // parameters for extended command
     ProtocolSSTP proto_sstp_;           // SSTP protocol instance
@@ -129,7 +129,7 @@ class CanHost {
     uint8_t      *package_buffer_;      // buffer for packager of SSTP protocol
     MessageBufferHandle_t ext_cmd_q_;   // command queue from ReceiveHandler() to EventHandler for extend command
     CanExtWaitNode_t      ext_wait_q_;
-    xSemaphoreHandle      ext_wait_lock_;
+    SemaphoreHandle_t     ext_wait_lock_;
 
     // map for message id and function id
     MessageMap_t  map_message_function_[MODULE_SUPPORT_MESSAGE_ID_MAX];
