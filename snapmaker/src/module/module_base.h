@@ -209,7 +209,10 @@ enum ModuleExtendCommand {
 
   MODULE_EXT_CMD_INFORM_UPGRADE_START,
 
-  MODULE_EXT_CMD_INVALID
+  MODULE_EXT_CMD_INVALID,
+
+  MODULE_EXT_CMD_DUMP_MEMORY_REQ = 0xFC,
+  MODULE_EXT_CMD_DUMP_MEMORY_ACK = 0xFD,
 };
 
 
@@ -226,6 +229,7 @@ class ModuleBase {
   public:
     ModuleBase(uint16_t id): device_id_(id) {}
 
+    static ErrCode DumpMemory(MAC_t &mac, uint32_t addr);
     static ErrCode Upgrade(MAC_t &mac, uint32_t fw_addr, uint32_t length);
     static ErrCode InitModule8p(MAC_t &mac, int dir_pin, uint8_t index);
 

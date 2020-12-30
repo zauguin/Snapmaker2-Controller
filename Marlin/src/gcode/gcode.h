@@ -893,6 +893,8 @@ private:
 
   static void M1010();
 
+  static void M1337();
+
   static void M1999();
 
   static void M2000();

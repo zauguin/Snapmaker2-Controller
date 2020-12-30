@@ -36,6 +36,7 @@
 #include "src/inc/MarlinConfig.h"
 #include "src/feature/bedlevel/bedlevel.h"
 #include "src/module/settings.h"
+#include "src/libs/hex_print.h"
 #include HAL_PATH(src/HAL, HAL.h)
 
 extern ToolHead3DP printer_single;
@@ -168,6 +169,36 @@ out:
   vPortFree(cmd.data);
 
   return ret;
+}
+
+ErrCode ModuleBase::DumpMemory(MAC_t &mac, uint32_t addr) {
+  CanExtCmd_t cmd;
+
+  cmd.mac  = mac;
+  cmd.data = (uint8_t *)pvPortMalloc(128 + MODULE_EXT_CMD_INDEX_DATA);
+  if (!cmd.data) {
+    LOG_I("Failed to allocate mem\n");
+    return E_NO_MEM;
+  }
+
+  cmd.data[MODULE_EXT_CMD_INDEX_ID] = MODULE_EXT_CMD_DUMP_MEMORY_REQ;
+  *(uint32_t*)(cmd.data + MODULE_EXT_CMD_INDEX_DATA) = addr;
+  cmd.length = MODULE_EXT_CMD_INDEX_DATA + sizeof(uint32_t);
+
+  if (ErrCode err = canhost.SendExtCmdSync(cmd, 500, 2)) {
+    LOG_I("Failed to request memory dump\n");
+    vPortFree(cmd.data);
+    return err;
+  }
+
+  auto iter = cmd.data + MODULE_EXT_CMD_INDEX_DATA;
+  const auto end = cmd.data + cmd.length;
+  for (; iter != end; ++iter) {
+    print_hex_byte(*iter);
+  }
+
+  vPortFree(cmd.data);
+  return E_SUCCESS;
 }
 
 
