@@ -128,6 +128,7 @@ class ToolHeadLaser: public ModuleBase {
     }
 
     ToolHeadLaserState state() { return state_; }
+    void    SetFan(bool enabled);
 
   private:
     void    CheckFan(uint16_t pwm);
