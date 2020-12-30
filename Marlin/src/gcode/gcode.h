@@ -513,6 +513,9 @@ private:
     TERN_(COOLANT_MIST, static void M7());
     TERN_(COOLANT_FLOOD, static void M8());
     static void M9();
+  #elif MOTHERBOARD == BOARD_SNAPMAKER_2_0
+    static void M7();
+    static void M9();
   #endif
 
   TERN_(EXTERNAL_CLOSED_LOOP_CONTROLLER, static void M12());

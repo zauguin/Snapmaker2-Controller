@@ -204,6 +204,18 @@ void ToolHeadLaser::TryCloseFan() {
 }
 
 
+void ToolHeadLaser::SetFan(bool active) {
+  if (state_ == TOOLHEAD_LASER_STATE_OFFLINE)
+    return;
+
+  uint8_t         buffer[2] = {0, uint8_t(255 * active)};
+  CanStdMesgCmd_t cmd { msg_id_set_fan_, sizeof(buffer), buffer };
+  canhost.SendStdCmd(cmd);
+
+  fan_state_ = active ? TOOLHEAD_LASER_FAN_STATE_OPEN : TOOLHEAD_LASER_FAN_STATE_CLOSED;
+}
+
+
 ErrCode ToolHeadLaser::LoadFocus() {
   CanStdMesgCmd_t cmd;
 

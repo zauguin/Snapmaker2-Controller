@@ -401,8 +401,8 @@ void GcodeSuite::execute_command(void) {
         case 5: M5(); break;                                      // M5: Turn OFF Laser | Spindle
       #endif
 
-      #if ENABLED(COOLANT_CONTROL)
-        #if ENABLED(COOLANT_MIST)
+      #if ENABLED(COOLANT_CONTROL) || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
+        #if ENABLED(COOLANT_MIST) || (MOTHERBOARD == BOARD_SNAPMAKER_2_0)
           case 7: M7(); break;                                    // M7: Mist coolant ON
         #endif
         #if ENABLED(COOLANT_FLOOD)
